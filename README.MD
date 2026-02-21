@@ -1,7 +1,3 @@
-✅ readme.md 전체 내용을 통째로 교체할 수 있도록, 완성된 단일 파일 형태로 다시 제공할게
-아래 내용은 그대로 복붙하면 바로 readme.md로 완벽하게 동작하는 최종본이야.
-추가 편집 없이 바로 사용 가능하도록 구성했어.
-
 📘 ABAP Development Standard Guide
 ABAP 7.56 · Clean ABAP · Code Generation Rules · /abap-strict Specification
 이 문서는 ABAP 개발 시 반드시 따라야 하는 **표준 규칙(Standard)**을 정의한다.
