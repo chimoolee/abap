@@ -1,185 +1,400 @@
-# ABAP AI Code Generation Framework (SAP S/4HANA 2022 / ABAP 7.56)
+ABAP AI Code Generation Framework
 
-Maintained by: Chimoo Lee – SAP S/4HANA Logistics & ABAP Consultant  
-Target: SAP S/4HANA 2022, ABAP 7.56  
+SAP S/4HANA 2022 / ABAP 7.56
+
+Maintained by: Chimoo Lee – SAP S/4HANA Logistics & ABAP Consultant
+Target: SAP S/4HANA 2022 / ABAP 7.56
 API: OpenAI Responses API (/v1/responses)
 
----
+1. Overview
 
-## 1. Overview
-
-This repository defines the **official AI-driven ABAP generation standard** for SAP S/4HANA 2022 systems.
+This repository defines the official AI-driven ABAP generation standard for SAP S/4HANA 2022 systems.
 
 It provides:
-- OpenAI API integration from ABAP (SM59 HTTP destination)
-- JSON response parsing and **ABAP_START ~ ABAP_END** extraction
-- **Enterprise double-pass** validation (Generator → Validator/Repair)
-- Automatic syntax checking
-- TEST / CREATE execution modes
-- Clean ABAP 7.56 coding standards
-- HTTP/Proxy diagnostics
 
-(Existing baseline summary derived from current README content.) :contentReference[oaicite:1]{index=1}
+OpenAI API integration from ABAP (SM59 HTTP destination)
 
----
+JSON response parsing and ABAP_START ~ ABAP_END extraction
 
-## 2. System Architecture
+Enterprise double-pass validation (Generator → Validator / Repair)
 
-User Prompt  
-↓  
-ABAP Generator Report (ZAI_*)  
-↓  
-OpenAI Responses API (HTTPS)  
-↓  
-JSON Response  
-↓  
-Extract ABAP_START ~ ABAP_END  
-↓  
-(Option) Validator pass (repair)  
-↓  
-Syntax Check  
-↓  
-TEST: Display only / CREATE: INSERT REPORT (+ GENERATE REPORT optional)
+Automatic syntax checking
 
----
+TEST / CREATE execution modes
 
-## 3. Prerequisites
+Clean ABAP 7.56 coding standards
 
-### 3.1 SM59 Destination (Required)
-Create an HTTP destination (example: `ZOPENAI`)
-- Host: `api.openai.com`
-- Service: `443`
-- Path Prefix: `/v1/responses`
-- SSL: Enabled (STRUST must be OK)
+HTTP / Proxy diagnostics
 
-### 3.2 SSL / Certificates (STRUST)
-Ensure SSL trust chain is installed properly for outbound HTTPS.
+Metadata-assisted AI generation
 
-### 3.3 Proxy/Firewall
+Enterprise class-based architecture
+
+2. System Architecture
+User Prompt
+     ↓
+ABAP Generator Report (ZAI_*)
+     ↓
+OpenAI Responses API (HTTPS)
+     ↓
+JSON Response
+     ↓
+Extract ABAP_START ~ ABAP_END
+     ↓
+(Option) Validator pass (repair)
+     ↓
+Syntax Check
+     ↓
+TEST: Display only
+CREATE: INSERT REPORT (+ GENERATE REPORT optional)
+2.1 ABAP Service Class Architecture (Enterprise Design)
+
+To ensure maintainability, scalability, and enterprise-grade stability,
+the AI generator must be structured using service classes instead of procedural FORM logic.
+
+The generator report (ZAI_*) should act only as an orchestrator, while the main logic is delegated to specialized classes.
+
+Architecture
+ZAI_MAIN (REPORT)
+   │
+   ├─ ZCL_ZAI_PROMPT_ANALYZER
+   ├─ ZCL_ZAI_METADATA_READER
+   ├─ ZCL_ZAI_OPENAI_CLIENT
+   ├─ ZCL_ZAI_CODE_EXTRACTOR
+   ├─ ZCL_ZAI_SYNTAX_CHECKER
+   ├─ ZCL_ZAI_REPAIR_ENGINE
+   └─ ZCL_ZAI_PROGRAM_BUILDER
+Responsibilities
+Class	Responsibility
+ZCL_ZAI_PROMPT_ANALYZER	Converts natural language prompt into structured ABAP task description
+ZCL_ZAI_METADATA_READER	Reads SAP metadata (DD02L/DD03L/TADIR/TRDIR) to improve AI accuracy
+ZCL_ZAI_OPENAI_CLIENT	Handles OpenAI Responses API communication
+ZCL_ZAI_CODE_EXTRACTOR	Extracts ABAP source between ABAP_START and ABAP_END
+ZCL_ZAI_SYNTAX_CHECKER	Executes SYNTAX-CHECK on generated code
+ZCL_ZAI_REPAIR_ENGINE	Sends syntax errors back to AI for automatic correction
+ZCL_ZAI_PROGRAM_BUILDER	Creates final program via INSERT REPORT
+2.2 Execution Flow (Enterprise Pipeline)
+User Prompt
+   │
+   ▼
+Prompt Analyzer
+   │
+   ▼
+Metadata Reader
+   │
+   ▼
+OpenAI Client
+   │
+   ▼
+Code Extractor
+   │
+   ▼
+Syntax Checker
+   │
+   ▼
+Repair Engine (optional loop)
+   │
+   ▼
+Program Builder
+   │
+   ▼
+TEST / CREATE Mode
+2.3 Syntax Repair Loop
+
+To achieve enterprise stability, generated code must pass through an automatic syntax repair loop.
+
+Example flow:
+
+AI Generated Code
+      │
+      ▼
+SYNTAX-CHECK
+      │
+   OK │ ERROR
+      ▼
+Repair Engine → OpenAI Validator
+      │
+      ▼
+Re-check Syntax
+
+Recommended configuration:
+
+MAX_REPAIR_ATTEMPTS = 3
+
+If syntax errors remain after the final attempt, the program must not be saved.
+
+2.4 Program Creation
+
+Final ABAP programs should be created using standard SAP mechanisms.
+
+Preferred approach:
+
+INSERT REPORT lv_prog FROM lt_source.
+
+Optional activation:
+
+GENERATE REPORT lv_prog.
+2.5 Metadata Injection (Accuracy Booster)
+
+Before generating code, the framework should query SAP dictionary metadata.
+
+Example:
+
+SELECT fieldname
+FROM dd03l
+WHERE tabname = 'VBAK'.
+
+This information is injected into the AI prompt to prevent:
+
+invalid field references
+
+non-existent tables
+
+incorrect Open SQL usage
+
+Metadata injection significantly improves generation accuracy.
+
+3. Prerequisites
+3.1 SM59 Destination (Required)
+
+Create an HTTP destination (example: ZOPENAI)
+
+Host
+
+api.openai.com
+
+Service
+
+443
+
+Path Prefix
+
+/v1/responses
+
+SSL
+
+Enabled
+
+STRUST must contain a valid certificate chain.
+
+3.2 SSL / Certificates (STRUST)
+
+Ensure the SSL trust chain is installed properly for outbound HTTPS communication.
+
+3.3 Proxy / Firewall
+
 Corporate environments may require proxy authentication.
-- Capture and display diagnostic headers for troubleshooting:
-  - HTTP status code
-  - `WWW-Authenticate`
-  - `Proxy-Authenticate`
-  - response body prefix
 
----
+Capture and display diagnostic headers for troubleshooting.
 
-## 4. Output Contract (MUST)
+Example diagnostics:
 
-AI output must be returned **only** within markers:
+HTTP status code
 
-**No markdown, no code fences, no extra commentary outside markers.**
+WWW-Authenticate
 
----
+Proxy-Authenticate
 
-## 5. Coding Standards (Clean ABAP / ABAP 7.56)
+response body prefix
 
-### 5.1 Naming
-- Reports: `ZAI_*`
-- Classes: `ZCL_*`
-- Internal table: `lt_*`
-- Work area/structure: `ls_*`
-- Variables: `lv_*`
-- Constants: `gc_*`
+4. Output Contract (MUST)
 
-### 5.2 Open SQL
-- Never use `SELECT *`
-- Use explicit field lists and `@` host variables
-- Avoid CASE/arithmetic in SQL; calculate in ABAP
-- Use only fields that exist; do not guess
-- If selecting from MAKT: filter `SPRAS = @sy-langu`
+AI output must be returned only within markers.
 
-### 5.3 Error handling
-- Wrap risky parts with `TRY...CATCH cx_root`
-- Provide meaningful messages
+ABAP_START
+<ABAP CODE>
+ABAP_END
 
-### 5.4 ALV
-Prefer `CL_SALV_TABLE=>FACTORY` (avoid obsolete ALV frameworks)
+Rules:
 
----
+No markdown
 
-## 6. Enterprise Prompt Rules (Single Source of Truth)
+No code fences
 
-This section is the **canonical prompt rule text** used by ABAP `build_system_rules`,
-`build_marker_wrapper_rules`, `build_validator_rules`, `build_validator_user_prompt`.
+No explanations
 
-> NOTE: For enterprise stability, the ABAP program reads these rules from an ABAP source
-> (include/report) that mirrors this section. See section 7.
+No text outside markers
 
-### 6.1 Generator Rules (Pass 1)
-- You are a strict SAP ABAP 7.56 code generator for S/4HANA 2022.
-- Generate COMPLETE runnable REPORT program only.
-- Do NOT use markdown, backticks, or code fences.
-- Return output EXACTLY between markers ABAP_START and ABAP_END.
-- FIRST line must be ABAP_START; LAST line must be ABAP_END.
-- Output NOTHING outside markers.
-- Inside markers: ABAP code + ABAP comments only.
-- Do not output lists/bullets/headings like "IT:" or "Note:".
-- Exactly one REPORT statement. No INCLUDE/FUNCTION-POOL/MODULE-POOL.
-- Use one local final class lcl_app with class-method run.
-- START-OF-SELECTION must call lcl_app=>run.
-- Follow Clean ABAP.
-- Meaningful names (lt_, ls_, lv_, lo_), avoid unused variables.
-- Never SELECT *; explicit fields + @ in Open SQL.
-- Avoid CASE/arithmetic in SQL; calculate in ABAP.
-- Use only existing fields, do not guess.
-- For MAKT: SPRAS=@sy-langu.
-- No generic types in RETURNING parameters; avoid TYPE ANY.
-- Wrap risky parts in TRY...CATCH cx_root, MESSAGE TYPE E.
-- Use CL_SALV_TABLE=>FACTORY, avoid REUSE_ALV_*.
-- If unclear: assumptions as ABAP comments inside markers.
+5. Coding Standards (Clean ABAP / ABAP 7.56)
+5.1 Naming
+Object	Prefix
+Reports	ZAI_*
+Classes	ZCL_*
+Internal tables	lt_*
+Structures	ls_*
+Variables	lv_*
+Constants	gc_*
+5.2 Open SQL
 
-### 6.2 Marker Wrapper Rules
-- You are a strict ABAP wrapper.
-- Return EXACTLY the same content but wrapped with markers.
-- First line MUST be ABAP_START; last line MUST be ABAP_END.
-- Output NOTHING outside markers.
-- Do NOT add explanations; do NOT change the code.
-- Do NOT use markdown/backticks.
+Rules:
 
-### 6.3 Validator Rules (Pass 2)
-- You are an enterprise ABAP 7.56 validator and fixer for S/4HANA 2022.
-- Input may contain non-ABAP text.
-- Return ONLY a COMPLETE runnable ABAP REPORT.
-- No markdown/backticks/explanations.
-- Output MUST be wrapped with ABAP_START/ABAP_END.
-- Inside markers: ABAP code + ABAP comments only.
-- Remove English prose/analysis.
-- Exactly one REPORT. No INCLUDE/FUNCTION-POOL/MODULE-POOL.
-- Use local final class lcl_app with run; START-OF-SELECTION calls it.
-- Never SELECT *; explicit fields + @.
-- Use CL_SALV_TABLE=>FACTORY.
-- Prefer minimal changes; ensure compile & runnable.
+Never use SELECT *
 
-### 6.4 Validator User Prompt Template
-Fix the draft and output ONLY final ABAP between ABAP_START and ABAP_END. Remove any non-ABAP text.
+Use explicit field lists
 
----
+Use @ host variables
 
-## 7. How ABAP Loads These Rules (Enterprise stable)
+Avoid CASE or arithmetic in SQL
 
-Recommended approach (no internet dependency):
-1) Store section 6 as ABAP text in a dedicated ABAP include/report (single source inside SAP)
-2) ABAP `build_system_rules*` reads that ABAP source using `READ REPORT`
-3) Extract lines between markers and build final prompt string
+Perform calculations in ABAP
 
-(See code patch in the project.)
+Use only existing fields
 
----
+Do not guess fields
 
-## 8. Troubleshooting
+MAKT rule:
 
-### 8.1 Proxy auth popup / 407
-Disable SAP logon popup and print diagnostic headers.
+SPRAS = @sy-langu
+5.3 Error Handling
 
-### 8.2 SSL errors
-Check STRUST chain and outbound HTTPS policy.
+All risky logic must be wrapped with:
 
-### 8.3 Model returns non-ABAP text
-Use validator pass + “REPORT must exist” gate. Do not save garbage programs.
+TRY.
+  ...
+CATCH cx_root INTO DATA(lx).
+  MESSAGE lx->get_text( ) TYPE 'E'.
+ENDTRY.
+5.4 ALV
 
----
+Preferred ALV framework:
 
-## 9. License
-Personal Research & Educational Use
+CL_SALV_TABLE=>FACTORY
+
+Avoid obsolete:
+
+REUSE_ALV_*
+6. Enterprise Prompt Rules (Single Source of Truth)
+
+This section defines the canonical prompt rules used by:
+
+build_system_rules
+
+build_marker_wrapper_rules
+
+build_validator_rules
+
+build_validator_user_prompt
+
+These rules ensure consistent AI generation behavior.
+
+6.1 Generator Rules (Pass 1)
+
+You are a strict SAP ABAP 7.56 code generator for S/4HANA 2022.
+
+Generate COMPLETE runnable REPORT program only.
+
+Do NOT use markdown, backticks, or code fences.
+
+Return output EXACTLY between markers ABAP_START and ABAP_END.
+
+FIRST line must be ABAP_START.
+
+LAST line must be ABAP_END.
+
+Output NOTHING outside markers.
+
+Inside markers: ABAP code + ABAP comments only.
+
+Exactly one REPORT statement.
+
+No INCLUDE / FUNCTION-POOL / MODULE-POOL.
+
+Use local final class lcl_app.
+
+START-OF-SELECTION must call lcl_app=>run.
+
+Follow Clean ABAP.
+
+Never SELECT *.
+
+Explicit fields with @ host variables.
+
+Avoid CASE/arithmetic in SQL.
+
+For MAKT use SPRAS = @sy-langu.
+
+6.2 Marker Wrapper Rules
+
+You are a strict ABAP wrapper.
+
+Return EXACTLY the same content wrapped with markers.
+
+Do NOT change the code.
+
+Do NOT add explanations.
+
+Output only between:
+
+ABAP_START
+ABAP_END
+6.3 Validator Rules (Pass 2)
+
+You are an enterprise ABAP validator for S/4HANA 2022.
+
+Input may contain non-ABAP text.
+
+Return ONLY a COMPLETE runnable ABAP REPORT.
+
+Remove English explanation text.
+
+Use CL_SALV_TABLE=>FACTORY.
+
+Ensure the program compiles.
+
+6.4 Validator User Prompt Template
+Fix the draft and output ONLY final ABAP between ABAP_START and ABAP_END.
+Remove any non-ABAP text.
+7. How ABAP Loads These Rules (Enterprise Stable)
+
+Recommended approach:
+
+Store section 6 inside an ABAP include/report.
+
+Use READ REPORT to load the text.
+
+Extract rules between markers.
+
+Build the final AI prompt dynamically.
+
+This ensures:
+
+No internet dependency
+
+Version control inside SAP
+
+Enterprise stability
+
+8. Troubleshooting
+Proxy Authentication (HTTP 407)
+
+Disable SAP popup login and print diagnostic headers.
+
+SSL Errors
+
+Check:
+
+STRUST certificate chain
+
+outbound HTTPS policy
+
+Model Returns Non-ABAP Text
+
+Use the validator pass and enforce the rule:
+
+REPORT must exist
+
+If validation fails:
+
+Do not save the generated program.
+
+ABAP_START / ABAP_END Marker Misuse
+
+ABAP_START and ABAP_END are extraction markers for AI output handling.
+They are not valid ABAP statements and must never be pasted directly into SE38 source code.
+When creating or activating a program in SE38, copy only the pure ABAP code between the markers.
+The actual program source must begin with a valid REPORT statement.
+If ABAP_START is pasted into SE38, typical errors include:
+
+The statement "ABAP_START" is invalid.
+
+The REPORT/PROGRAM statement is missing.
