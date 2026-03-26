@@ -398,3 +398,35 @@ If ABAP_START is pasted into SE38, typical errors include:
 The statement "ABAP_START" is invalid.
 
 The REPORT/PROGRAM statement is missing.
+
+---
+
+# Bulk PFCG Role Copy (CSV 기반)
+
+## 개요
+SAP S/4HANA 2022 환경에서  
+**PFCG Role을 CSV 파일 기반으로 대량 복제**하기 위한 ABAP 리포트 프로그램이다.
+
+- CSV 기반 (엑셀 보안 이슈 없음)
+- 시뮬레이션 모드 제공
+- SAP 표준 Function Module 사용
+
+---
+
+## 실행 환경
+- SAP S/4HANA 2022
+- SAP GUI (Frontend 필수)
+- ABAP Classic Report
+
+---
+
+## 입력 파일 (CSV) 사양
+
+### 파일 형식
+- `.csv`
+- UTF-8 인코딩 권장
+- 구분자: `,` (콤마)
+
+### 컬럼 정의 (필수)
+```text
+SOURCE_ROLE,TARGET_ROLE,ROLE_TEXT
