@@ -414,6 +414,40 @@ To ensure successful code generation and prevent activation failures, the AI mus
 - **No MANDT**: Never include the client field (`MANDT`) in SQL conditions.
 - **No Text Symbols**: Use string literals or constants instead of `TEXT-001`.
 - **Activation Safety**: Ensure all variables referenced in the selection screen are declared before the class definition.
+# ABAP AI Coding Standards for SAP S/4HANA 2022
 
+## 🚀 Selection Screen & Declaration Rules (CRITICAL)
+
+### 1. Mandatory TABLES Statement for Multiple Tables
+- AI must declare **ALL** referenced tables in `SELECT-OPTIONS` using a `TABLES` statement at the very top of the report.
+- If you use multiple tables like `VBAK` and `VBAP`, they must all be declared.
+- **Correct**:
+  ```abap
+  REPORT z_ai_report.
+  TABLES: vbak, vbap, mara. " Declare all tables used in selection screen
+  
+  SELECT-OPTIONS: s_vbeln FOR vbak-vbeln,
+                  s_posnr FOR vbap-posnr,
+                  s_matnr FOR mara-matnr.
+2. Variable Declaration Strategy
+All local variables used in logic (e.g., lv_detected_tables, lv_found_table) must be explicitly declared in the DATA section of the method or class before use to avoid "Field unknown" errors.
+
+Use meaningful prefixes: lv_ for local variables, lt_ for internal tables, lo_ for objects.
+
+🛠 Programming Model & Syntax
+Target System: SAP S/4HANA 2022 / ABAP 7.56.
+
+ALV: Always use CL_SALV_TABLE=>FACTORY.
+
+Open SQL: Use Tilde (~) for field selection (e.g., vbak~vbeln) and Host Variables (@) for all ABAP variables.
+
+No MANDT: Never include client fields in SQL conditions; ABAP handles this automatically.
+
+⚠️ Stability Safeguards
+One Report: Exactly one REPORT statement per generation.
+
+No Text Symbols: Use string literals or constants (No TEXT-001).
+
+Clean ABAP: Encapsulate all logic within a local final class lcl_app.
 ## Maintainer
 Chimoo Lee
