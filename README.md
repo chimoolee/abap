@@ -1,206 +1,306 @@
-[README.md](https://github.com/user-attachments/files/26774116/README.md)
-# ABAP AI Code Generation Framework (ZAICODING Integrated Edition)
-
-## Overview
-This repository defines a **production-ready AI-driven ABAP code generation framework** for SAP S/4HANA 2022 (ABAP 7.56).
-
-It combines:
-- Enterprise ABAP AI architecture
-- ZAICODING practical implementation
-- OpenAI Responses API integration
-- Automatic correction & stabilization engine
-- DDIC-aware prompt augmentation
-- FM → Program → TCODE static-analysis prompt guidance
-- Practical prompt templates for real-world SAP repository analysis
+# ABAP AI Code Generation Framework
+## ZAICODING Integrated Edition for SAP S/4HANA 2022 ABAP 7.56
 
 ---
 
-## ⚙️ Key Features
-- Natural language → ABAP REPORT
-- Model: `gpt-5.4`
-- Temperature configurable (default `0.2`)
-- Auto program naming: `ZAI_YYMMDD_HHMM`
-- `INSERT REPORT` + `GENERATE REPORT`
-- Auto correction engine (critical)
-- DDIC metadata injection
-- Main table detection from user prompt
-- SE38 auto launch on success
+## 1. Purpose
+
+This README defines the operating standard for **ZAICODING**, an AI-assisted ABAP code generation framework.
+
+ZAICODING converts natural language requests into runnable ABAP REPORT programs for SAP S/4HANA 2022.
+
+The main goal is not only to generate ABAP source code, but also to:
+
+- reduce hallucinated DDIC fields
+- enforce ABAP 7.56 compatible syntax
+- follow Clean ABAP style
+- generate complete runnable REPORT programs
+- automatically repair common AI-generated ABAP errors
+- validate generated programs with `GENERATE REPORT`
+- improve practical stability for SAP repository analysis tasks
 
 ---
 
-## Architecture
-User Prompt  
-↓  
-ZAI Generator  
-↓  
-OpenAI API  
-↓  
-ABAP Extraction (`ABAP_START` ~ `ABAP_END`)  
-↓  
-Auto Fix Engine  
-↓  
-Program Build  
-↓  
-Activation / SE38
+## 2. Target Environment
+
+| Item | Standard |
+|---|---|
+| SAP version | SAP S/4HANA 2022 |
+| ABAP version | ABAP 7.56 |
+| Main program | `ZAICODING` |
+| Generated program name | `ZAI_YYMMDD_HHMM` |
+| AI API | OpenAI Responses API |
+| Recommended model | `gpt-5.4` or latest stable GPT model |
+| Default temperature | `0.2` |
+| Output type | Full executable ABAP REPORT |
+| ALV standard | `CL_SALV_TABLE=>FACTORY` |
 
 ---
 
-## Enterprise Architecture
-`ZAI_MAIN (REPORT)`  
-├─ `ZCL_ZAI_PROMPT_ANALYZER`  
-├─ `ZCL_ZAI_METADATA_READER`  
-├─ `ZCL_ZAI_OPENAI_CLIENT`  
-├─ `ZCL_ZAI_CODE_EXTRACTOR`  
-├─ `ZCL_ZAI_SYNTAX_CHECKER`  
-├─ `ZCL_ZAI_REPAIR_ENGINE`  
-└─ `ZCL_ZAI_PROGRAM_BUILDER`
+## 3. High-Level Flow
+
+```text
+User Prompt
+  ↓
+Fixed Base Prompt Injection
+  ↓
+Prompt Analyzer
+  ↓
+Main Table Detection
+  ↓
+DDIC Metadata Injection
+  ↓
+OpenAI Responses API Call
+  ↓
+ABAP Code Extraction
+  ↓
+Auto-Fix / Repair Engine
+  ↓
+INSERT REPORT
+  ↓
+GENERATE REPORT
+  ↓
+Success: show generated source or open SE38
+Failure: show error and saved source
+```
 
 ---
 
-## Core Rules (VERY IMPORTANT)
+## 4. Recommended ZAICODING Components
 
-### 1. REPORT Rule
-- Only **ONE** `REPORT` statement allowed
-- Duplicate `REPORT` automatically removed
+```text
+ZAICODING / ZAI_MAIN
+ ├─ Prompt Analyzer
+ ├─ DDIC Metadata Reader
+ ├─ OpenAI Client
+ ├─ ABAP Code Extractor
+ ├─ Auto-Fix Engine
+ ├─ Syntax Checker
+ ├─ Program Builder
+ ├─ Prompt History Manager
+ └─ Result Viewer / Download Handler
+```
 
-### 2. Open SQL Rule
-- ❌ `SELECT *` 금지
-- ✅ Explicit field only
-- ✅ `@` only for variables
+Recommended class-style architecture:
 
-❌ Wrong:
+```text
+ZCL_ZAI_PROMPT_ANALYZER
+ZCL_ZAI_METADATA_READER
+ZCL_ZAI_OPENAI_CLIENT
+ZCL_ZAI_CODE_EXTRACTOR
+ZCL_ZAI_REPAIR_ENGINE
+ZCL_ZAI_SYNTAX_CHECKER
+ZCL_ZAI_PROGRAM_BUILDER
+ZCL_ZAI_PROMPT_HISTORY
+```
+
+---
+
+## 5. Critical ABAP Generation Rules
+
+### 5.1 REPORT Rule
+
+Generated source must contain exactly one program declaration.
+
+Allowed:
+
+```abap
+REPORT zmy_report.
+```
+
+Forbidden:
+
+```abap
+REPORT zmy_report.
+REPORT zmy_report2.
+```
+
+Auto-fix rule:
+
+- keep only the first valid `REPORT` statement
+- remove duplicate `REPORT`, `PROGRAM`, or `FUNCTION-POOL` statements
+
+---
+
+### 5.2 Full Runnable REPORT Rule
+
+The AI must always return a complete runnable ABAP REPORT.
+
+Forbidden outputs:
+
+- code fragments only
+- method body only
+- class only without executable entry point
+- markdown explanation
+- JSON response
+- pseudo code
+
+Required:
+
+```abap
+REPORT z....
+
+START-OF-SELECTION.
+  ...
+```
+
+---
+
+### 5.3 Open SQL Rule
+
+Default rule:
+
+- do not use `SELECT *`
+- use explicit field lists
+- use `@` only for ABAP variables
+- do not use `@` before SQL literals
+
+Wrong:
+
 ```abap
 WHERE mtart = @'FERT'
 ```
 
-✅ Correct:
+Correct:
+
 ```abap
 WHERE mtart = 'FERT'
 ```
 
-### 3. Elementary Type Rule (CRITICAL)
-❌ Wrong:
+Correct host variable:
+
+```abap
+WHERE mtart = @lv_mtart
+```
+
+---
+
+### 5.4 Exception: All Fields Request
+
+If the user explicitly asks for all fields, such as:
+
+```text
+전체 필드
+전부 보여줘
+모든 필드
+all fields
+```
+
+then `SELECT *` is allowed only for that specific request.
+
+Recommended rule:
+
+```abap
+DATA lt_mara TYPE TABLE OF mara.
+
+SELECT *
+  FROM mara
+  INTO TABLE @lt_mara
+  UP TO 100 ROWS.
+```
+
+When all fields are requested:
+
+- prefer the real DDIC table type
+- do not manually enumerate hundreds of fields
+- do not create a fragile local `TYPES` structure
+
+---
+
+### 5.5 Partial Field SELECT Rule
+
+If only some fields are selected, create a local structure that exactly matches the selected fields.
+
+Correct:
+
+```abap
+TYPES:
+  BEGIN OF ty_mara,
+    matnr TYPE mara-matnr,
+    mtart TYPE mara-mtart,
+    matkl TYPE mara-matkl,
+  END OF ty_mara.
+
+DATA lt_mara TYPE TABLE OF ty_mara.
+
+SELECT matnr,
+       mtart,
+       matkl
+  FROM mara
+  INTO TABLE @lt_mara
+  UP TO 100 ROWS.
+```
+
+Forbidden:
+
+```abap
+DATA lt_mara TYPE TABLE OF mara.
+
+SELECT matnr,
+       mtart
+  FROM mara
+  INTO TABLE @lt_mara.
+```
+
+---
+
+### 5.6 Elementary DDIC Type Initialization Rule
+
+Wrong:
+
 ```abap
 DATA(lv_mtart) = VALUE mara-mtart( 'FERT' ).
 ```
 
-✅ Correct:
+Correct:
+
 ```abap
 DATA lv_mtart TYPE mara-mtart VALUE 'FERT'.
 ```
 
-### 4. SALV Rule
-❌ Wrong:
+Auto-fix should detect and repair invalid elementary `VALUE ddic-type(...)` patterns.
+
+---
+
+### 5.7 SALV Rule
+
+Only use `CL_SALV_TABLE=>FACTORY` for ALV output.
+
+Wrong:
+
 ```abap
-NEW cl_salv_table( )
 CREATE OBJECT lo_alv.
+lo_alv = NEW cl_salv_table( ).
 ```
 
-✅ Correct:
+Correct:
+
 ```abap
 DATA lo_alv TYPE REF TO cl_salv_table.
+
 cl_salv_table=>factory(
-  IMPORTING r_salv_table = lo_alv
-  CHANGING  t_table      = lt_data ).
+  IMPORTING
+    r_salv_table = lo_alv
+  CHANGING
+    t_table      = lt_data ).
+
+lo_alv->display( ).
 ```
 
-### 5. Partial SELECT Rule
-When selecting only a subset of fields:
-- define a local `TYPES` structure matching the selected fields exactly
-- do **not** select partial fields into a full DDIC table type such as `KNA1`
+Forbidden:
+
+- `REUSE_ALV_GRID_DISPLAY`
+- direct `NEW cl_salv_table( )`
+- `CREATE OBJECT lo_alv`
 
 ---
 
-## Auto Correction Engine
-Automatically fixes:
+## 6. DDIC Metadata Injection
 
-| Issue | Fix |
-|---|---|
-| `@'FERT'` | `'FERT'` |
-| `VALUE mara-mtart(...)` | `TYPE ... VALUE ...` |
-| Duplicate `REPORT` | remove |
-| Damaged keywords | repair |
-| SALV misuse | `CL_SALV_TABLE=>FACTORY` |
-| `DNUM` hallucination | remove / filter |
-| `TFDIR` field misuse | normalize toward confirmed field usage |
+ZAICODING should detect the main SAP table from the user prompt and read real DDIC fields before calling OpenAI.
 
----
+Recommended DDIC read:
 
-## Execution Flow
-1. Prompt 입력
-2. OpenAI 호출
-3. ABAP 추출
-4. 자동 보정
-5. 프로그램 생성
-
-### ✔ 성공
-→ SE38 자동 호출
-
-### ❌ 실패
-→ 오류 + 저장된 소스 표시
-
----
-
-## Example Prompt
-`플랜트 1000 기준 자재 조회 ALV 만들어줘`
-
----
-
-## ⚠️ Important Notes
-- API Key 교체 필수
-- 생성 코드 반드시 검증
-- `ABAP_START` / `ABAP_END` 는 **SE38 소스에 넣으면 안 됨**
-- `ABAP_START` / `ABAP_END` 는 **응답 추출용 마커일 뿐**, 실제 프로그램 소스에 포함하면 안 됨
-- 위 내용은 Troubleshooting 시에도 반복해서 확인할 것
-
----
-
-## Enterprise Rules
-- Exactly one `REPORT`
-- No markdown
-- No explanation text
-- Clean ABAP only
-- Explicit fields only
-- `CL_SALV_TABLE=>FACTORY` only
-- Invented DDIC fields forbidden
-- Repository hallucination forbidden
-
----
-
-## Advanced Rules (Stability)
-- `CS` / `CP` predicate → safer alternatives when needed
-- `SELECT-OPTIONS` → DDIC 변수 사용
-- Z/Y namespace only scan when custom-only scope is required
-- recursion depth limit = 8 for static custom-code scanners
-- hotspot ALV navigation 권장
-- `CONCATENATE` numeric → 문자 변환 필수
-
----
-
-## Technical Setup
-
-### SM59
-- Host: `api.openai.com`
-- Path: `/v1/responses`
-- SSL 필수
-
-### STRUST
-- 인증서 체인 필요
-
----
-
-## ZAICODING Improvement Update
-The following enhancements were added to improve practical generation stability in SAP S/4HANA 2022 ABAP 7.56.
-
-### 1. DDIC Metadata Injection
-Before sending the prompt to OpenAI, ZAICODING can detect the likely main table from the user request and read real DDIC fields from `DD03L`.
-
-Purpose:
-- reduce hallucinated field names
-- prevent invalid components such as non-existent MARA fields
-- improve field-level accuracy
-
-Recommended approach:
 ```abap
 SELECT fieldname
   FROM dd03l
@@ -211,243 +311,606 @@ SELECT fieldname
   INTO TABLE @rt_fields.
 ```
 
-Prompt augmentation rule:
-- inject confirmed field names into the prompt
-- explicitly instruct the model to use only confirmed DDIC fields
-- forbid invented field names
+Prompt augmentation example:
 
-Example guidance:
 ```text
-Confirmed DDIC fields for table MARA are: MATNR, ERSDA, ERNAM, ...
-Never invent field names that are not confirmed in DDIC.
+Confirmed DDIC fields for MARA are:
+MATNR, ERSDA, ERNAM, LAEDA, AENAM, MTART, MATKL, MEINS, ...
+
+Use only these confirmed fields.
+Never invent DDIC fields.
+If a required field is not confirmed, redesign the logic instead of inventing a field.
 ```
 
-### 2. "Show All Fields" Request Handling
-If the user explicitly requests all fields, for example:
-- 전부
-- 전체
-- 모든 필드
-- all fields
+Purpose:
 
-then ZAICODING may allow the model to use the **real DDIC full table type** and `SELECT *` for that specific request.
+- prevent invalid components
+- reduce hallucinated fields
+- improve generation stability
+- support field-safe Open SQL generation
 
-Rule:
-- when all fields are requested, prefer the real DDIC structure
-- do not enumerate all fields manually
-- do not build a fragile local `TYPES` list for full-table output
+---
 
-Recommended instruction:
+## 7. Main Table Detection Rules
+
+ZAICODING should map common user phrases to representative SAP tables.
+
+| User keyword | Main table |
+|---|---|
+| 자재, material, MARA | `MARA` |
+| 자재내역, material text, MAKT | `MAKT` |
+| 고객, customer, KNA1 | `KNA1` |
+| 벤더, 공급업체, vendor, LFA1 | `LFA1` |
+| 판매오더, sales order, VBAK | `VBAK` |
+| 판매오더 품목, sales item, VBAP | `VBAP` |
+| 납품, delivery, LIKP | `LIKP` |
+| 납품품목, LIPS | `LIPS` |
+| 구매오더, purchase order, EKKO | `EKKO` |
+| 구매오더 품목, EKPO | `EKPO` |
+| 재고, storage location stock, MARD | `MARD` |
+| 자재문서, material document, MSEG | `MSEG` |
+| 함수 모듈, 펑션 모듈, function module | `TFDIR` |
+| 트랜잭션, TCODE | `TSTC` |
+
+---
+
+## 8. Repository Analysis Safety Rules
+
+For repository analysis programs, the AI must not invent repository fields.
+
+Allowed repository tables should be used only with confirmed fields.
+
+Recommended tables:
+
+| Purpose | Table |
+|---|---|
+| Transaction start program | `TSTC` |
+| Transaction text | `TSTCT` |
+| Program attributes | `TRDIR` |
+| Function module directory | `TFDIR` |
+| Function module include relationship | `ENLFDIR` |
+| Include hierarchy | `D010INC` |
+| Dynpro header | `D020S` |
+| Dynpro field list | `D021S` |
+
+---
+
+## 9. TFDIR Misuse Protection
+
+`TFDIR` is a DDIC table name, not a field name.
+
+Correct fields:
+
 ```text
-If the user explicitly requests to show all fields of one DDIC table, you may use SELECT * into the full DDIC table type of that table.
-In that case, do not enumerate fields manually.
-When all fields are requested, prefer the real DDIC structure instead of a local TYPES definition.
+TFDIR-FUNCNAME
+TFDIR-PNAME
 ```
-
-This is especially useful for requests such as:
-- "HAWA 자재마스터 전부 표시"
-- "MARA 전체 필드 보여줘"
-
-### 3. Main Table Detection Logic
-ZAICODING can map common user phrases to representative SAP tables before prompt generation.
-
-Examples:
-- 자재 / `MARA` → `MARA`
-- 고객 / `KNA1` → `KNA1`
-- 벤더 / 공급업체 / `LFA1` → `LFA1`
-- 판매오더 / `VBAK` → `VBAK`
-- `VBAP` → `VBAP`
-- `MSEG` → `MSEG`
-- `MARD` → `MARD`
-- 함수 모듈 / 펑션 모듈 / `FUNCTION MODULE` / `TFDIR` → `TFDIR`
-- 트랜잭션 / `TCODE` / `TSTC` → `TSTC`
-
-This helps drive DDIC metadata lookup and improves prompt precision.
-
-### 4. Existing Auto-Fix Rules Retained
-The current stabilization rules remain active:
-- duplicate `REPORT` removal
-- invalid host literal fix `@'FERT'` → `'FERT'`
-- elementary DDIC initialization fix `VALUE mara-mtart( 'FERT' )` → `TYPE mara-mtart VALUE 'FERT'`
-- SALV misuse fix `NEW cl_salv_table( )` / `CREATE OBJECT lo_alv` → `CL_SALV_TABLE=>FACTORY`
-- damaged keyword repair such as `ATA:` → `DATA:` and `TART-OF-SELECTION.` → `START-OF-SELECTION.`
-
-### 5. Repository Safety Rules Added
-Additional rules were added to reduce repository-analysis hallucinations:
-- Never invent DDIC fields.
-- Never invent repository fields.
-- Never use `DNUM` unless it is explicitly confirmed in the actual DDIC table.
-- Never use `TFDIR` as if it were a field name.
-- Do not confuse DDIC table names with internal table names.
-- If a requested field is not confirmed in DDIC, redesign the logic instead of inventing it.
-- When building local `TYPES`, explicitly declare every referenced component before use.
-
-### 6. TFDIR Misuse Protection
-Because `TFDIR` is a DDIC table name and not a field name, ZAICODING now applies stronger prompt guidance and normalization rules.
-
-Recommended repository-safe usage:
-- `TFDIR-FUNCNAME`
-- `TFDIR-PNAME`
 
 Forbidden patterns:
-- using `TFDIR` as a structure component without explicit local declaration
-- using `WITH KEY tfdir = ...`
-- referencing `-tfdir` as if it were a real component of a line structure
 
-### 7. FM → Program → TCODE Static Analysis Guidance
-For requests such as:
-- "내가 지정하는 펑션 모듈이 최종적으로 연결되어 있는 TCODE 찾아내기"
-- "Function Module을 호출하는 TCODE 찾아줘"
-
-ZAICODING should prefer the following static-analysis strategy:
-1. Start from `TFDIR` using confirmed fields such as `FUNCNAME` and `PNAME`
-2. Read transaction start programs from `TSTC-PGMNA`
-3. Expand includes recursively with `D010INC`
-4. Read source via `READ REPORT`
-5. Search for static `CALL FUNCTION '...'` statements only
-6. Treat dynamic calls as excluded or explicitly document them as out of scope
-
-### 8. Prompt Hardening Rules
-Additional practical prompt rules recommended for ZAICODING:
-- Use only confirmed DDIC fields when metadata is provided.
-- If all fields are requested, prefer the true DDIC table type and `SELECT *`.
-- If only partial fields are requested, use explicit field lists and local `TYPES`.
-- Use English literals for generated message text and ALV headers for higher encoding stability.
-- For repository analysis, prefer `TSTC`, `TSTCT`, `TRDIR`, `TFDIR`, `D010INC`, `ENLFDIR`, `D020S`, and `D021S` only when actual field names are confirmed.
-
-### 9. Fixed Base Prompt Strategy
-Instead of relying on ad-hoc user wording only, ZAICODING can prepend a **fixed base prompt** before the user request.
-
-Recommended design:
-- keep a hardcoded base instruction inside ZAICODING
-- always prepend it before the user prompt
-- append user prompt at the end
-- conditionally strengthen the prompt when keywords such as `FUNCTION MODULE`, `TCODE`, `펑션 모듈`, `함수 모듈`, or `트랜잭션` appear
-
-This improves consistency and reduces unstable generations.
-
-### 10. Multi-Line Prompt Input Recommendation
-For practical use, a single short one-line prompt is often not enough for complex static-analysis tasks. ZAICODING should support **multi-line prompt entry**, for example 10 lines.
-
-Recommended practical design:
-- prompt line 1 ~ prompt line 10 on screen 0100
-- merge non-empty lines into one final prompt separated by newline
-- preserve the final merged text for prompt logging in the generated source header
-
-This makes it easier to describe:
-- scope
-- exclusions
-- desired output columns
-- repository tables to prefer
-- special safety rules
-
-### 11. Practical Prompt Templates (Examples)
-Recommended user prompt examples for FM → TCODE analysis:
-
-```text
-내가 입력하는 펑션 모듈을 정적으로 호출하는 TCODE를 찾아줘. select-options로 함수모듈명을 여러 개 입력할 수 있게 해주고, 결과는 TCODE, TCODE 설명, 시작프로그램, 발견된 소스 프로그램 또는 INCLUDE, 라인번호, 소스라인을 ALV로 보여줘.
+```abap
+WITH KEY tfdir = ...
+ls_data-tfdir
+WHERE tfdir = ...
 ```
 
-```text
-Function Module 이름을 select-options로 입력받아서, 그 Function Module을 CALL FUNCTION으로 직접 호출하는 TCODE를 찾아주는 ABAP 리포트를 만들어줘. TSTC, TSTCT, TFDIR, D010INC, READ REPORT 기준으로 구현해줘.
-```
-
-```text
-Function Module -> Program -> TCODE 연결을 정적으로 분석하는 ABAP 리포트를 만들어줘. 시작은 TFDIR에서 FUNCNAME, PNAME을 읽고, TCODE는 TSTC-PGMNA를 기준으로 찾고, include는 D010INC로 재귀 탐색해줘.
-```
-
-### 12. Practical Outcome
-These improvements specifically target failures such as:
-- hallucinated DDIC fields like invalid MARA components
-- over-enumerated field lists for full-table display requests
-- `DNUM` hallucinations
-- `TFDIR` field misuse
-- unstable code generation for repository-analysis prompts
-
-With these changes, ZAICODING becomes more reliable for both:
-- full-table browse style reports
-- partial-field ALV report generation
-- FM → Program → TCODE static-analysis reports
-
-### 13. Recommended Next Step
-For maximum stability, the next upgrade should be:
-- structured Responses API parsing via `/UI2/CL_JSON`
-- optional double-pass validation (Generator → Validator / Repair)
-- prompt template selection helper on screen 0100
-- recent-prompt save / reload feature
+If a generated source uses `TFDIR` as a field name, reject or repair the source.
 
 ---
 
-## Troubleshooting
-- If generated code contains `ABAP_START` or `ABAP_END`, remove them before pasting into SE38.
-- If `DNUM` appears in a generated local structure or query without confirmed DDIC support, treat it as hallucination and reject the source.
-- If `TFDIR` is used as a field name, treat it as invalid and redesign around confirmed fields like `FUNCNAME` and `PNAME`.
-- If the user asks for all fields, prefer the real DDIC type instead of a huge hand-written local structure.
+## 10. DNUM Hallucination Protection
+
+`DNUM` must never be used unless confirmed in the actual DDIC table.
+
+If generated code contains `DNUM` without confirmed DDIC support:
+
+- treat it as hallucination
+- reject the generated source
+- regenerate or redesign the logic
 
 ---
-# ABAP AI Coding Standards for SAP S/4HANA 2022
 
-To ensure successful code generation and prevent activation failures, the AI must strictly follow these coding patterns.
+## 11. FM → Program → TCODE Static Analysis Strategy
 
-## 1. Selection Screen & Table Declarations (CRITICAL)
-- **Mandatory TABLES Statement**: When using `SELECT-OPTIONS`, you **MUST** declare the referenced table at the very top of the report using the `TABLES` statement.
-  - **Correct**: 
-    ```abap
-    REPORT z_example.
-    TABLES: vbak. " Required for SELECT-OPTIONS
-    SELECT-OPTIONS: s_vkorg FOR vbak-vkorg.
-    ```
-- **Field Reference**: For `PARAMETERS`, prefer using Data Elements directly to avoid unnecessary `TABLES` dependencies.
-  - **Correct**: `PARAMETERS: p_werks TYPE werks_d.`
+For prompts such as:
 
-## 2. Open SQL Syntax (ABAP 7.56+)
-- **Tilde (~) vs Hyphen (-)**:
-  - Inside **Open SQL** statements, use **Tilde (~)**: `SELECT vbak~vbeln FROM vbak...`
-  - In **DATA/TYPES** declarations, use **Hyphen (-)**: `DATA ls_vbak TYPE vbak.`
-- **Host Variables**: Always use `@` for all host variables in Open SQL (e.g., `WHERE vkorg IN @s_vkorg`).
+```text
+Function Module을 호출하는 TCODE 찾아줘
+내가 입력한 펑션 모듈이 연결된 TCODE 찾아줘
+```
 
-## 3. Class Structure & ALV
-- **Class Pattern**: Use a local final class `lcl_app` with a static method `run`.
-- **Logic**: All processing logic must be encapsulated within the class.
-- **ALV**: Use `CL_SALV_TABLE=>FACTORY` for output. Never use `REUSE_ALV_*` function modules.
+Recommended strategy:
 
-## 4. Error Prevention Rules
-- **No MANDT**: Never include the client field (`MANDT`) in SQL conditions.
-- **No Text Symbols**: Use string literals or constants instead of `TEXT-001`.
-- **Activation Safety**: Ensure all variables referenced in the selection screen are declared before the class definition.
-# ABAP AI Coding Standards for SAP S/4HANA 2022
+```text
+1. Select function module from TFDIR-FUNCNAME
+2. Read function group main/include program from TFDIR-PNAME or related repository info
+3. Read TCODE start programs from TSTC-PGMNA
+4. Expand includes recursively using D010INC
+5. Read source with READ REPORT
+6. Search static CALL FUNCTION '...' lines
+7. Display TCODE, text, start program, include, line number, source line in ALV
+```
 
-## 🚀 Selection Screen & Declaration Rules (CRITICAL)
+Scope rule:
 
-### 1. Mandatory TABLES Statement for Multiple Tables
-- AI must declare **ALL** referenced tables in `SELECT-OPTIONS` using a `TABLES` statement at the very top of the report.
-- If you use multiple tables like `VBAK` and `VBAP`, they must all be declared.
-- **Correct**:
-  ```abap
-  REPORT z_ai_report.
-  TABLES: vbak, vbap, mara. " Declare all tables used in selection screen
-  
-  SELECT-OPTIONS: s_vbeln FOR vbak-vbeln,
-                  s_posnr FOR vbap-posnr,
-                  s_matnr FOR mara-matnr.
-2. Variable Declaration Strategy
-All local variables used in logic (e.g., lv_detected_tables, lv_found_table) must be explicitly declared in the DATA section of the method or class before use to avoid "Field unknown" errors.
+- static `CALL FUNCTION 'FM_NAME'` only
+- dynamic function calls are out of scope unless explicitly requested
 
-Use meaningful prefixes: lv_ for local variables, lt_ for internal tables, lo_ for objects.
+Recommended recursion depth:
 
-🛠 Programming Model & Syntax
-Target System: SAP S/4HANA 2022 / ABAP 7.56.
+```text
+max depth = 8
+```
 
-ALV: Always use CL_SALV_TABLE=>FACTORY.
+---
 
-Open SQL: Use Tilde (~) for field selection (e.g., vbak~vbeln) and Host Variables (@) for all ABAP variables.
+## 12. Fixed Base Prompt Strategy
 
-No MANDT: Never include client fields in SQL conditions; ABAP handles this automatically.
+ZAICODING should not rely only on the user prompt.
 
-⚠️ Stability Safeguards
-One Report: Exactly one REPORT statement per generation.
+Always prepend a fixed base prompt before the user request.
 
-No Text Symbols: Use string literals or constants (No TEXT-001).
+Recommended structure:
 
-Clean ABAP: Encapsulate all logic within a local final class lcl_app.
+```text
+[ZAICODING Fixed Base Prompt]
+[DDIC Metadata, if detected]
+[Special Task Rules, if repository analysis]
+[User Prompt]
+```
+
+Base prompt must include:
+
+```text
+You are an expert ABAP developer for SAP S/4HANA 2022 ABAP 7.56.
+Generate only one complete runnable ABAP REPORT.
+Do not output markdown.
+Do not output explanation.
+Use Clean ABAP style.
+Use explicit Open SQL fields unless the user explicitly requests all fields.
+Use only confirmed DDIC fields when metadata is provided.
+Never invent DDIC or repository fields.
+Use CL_SALV_TABLE=>FACTORY for ALV.
+Return only ABAP code between ABAP_START and ABAP_END.
+Do not include ABAP_START or ABAP_END inside the final SE38 source.
+```
+
+---
+
+## 13. ABAP Extraction Rule
+
+OpenAI should return ABAP between markers:
+
+```text
+ABAP_START
+REPORT z...
+...
+ABAP_END
+```
+
+Extractor rule:
+
+- extract only content between `ABAP_START` and `ABAP_END`
+- remove the markers before `INSERT REPORT`
+- if markers are missing, try to find the first `REPORT` statement and extract ABAP source from there
+- remove markdown fences such as ```abap
+- remove explanation text before and after ABAP source
+
+Important:
+
+```text
+ABAP_START and ABAP_END are response extraction markers only.
+They must not be inserted into the generated SE38 source.
+```
+
+---
+
+## 14. Auto-Fix Engine Rules
+
+The repair engine should automatically fix known unstable patterns.
+
+| Issue | Repair |
+|---|---|
+| duplicate `REPORT` | keep only first one |
+| `@'FERT'` | `'FERT'` |
+| `VALUE mara-mtart( 'FERT' )` | `DATA lv_mtart TYPE mara-mtart VALUE 'FERT'` |
+| `CREATE OBJECT lo_alv` | replace with SALV factory pattern where possible |
+| `NEW cl_salv_table( )` | replace with SALV factory pattern where possible |
+| `ATA:` | `DATA:` |
+| `TART-OF-SELECTION.` | `START-OF-SELECTION.` |
+| `DNUM` hallucination | reject or remove if safe |
+| `TFDIR` as field name | reject or redesign |
+| markdown fences | remove |
+| `ABAP_START` / `ABAP_END` in final source | remove |
+
+---
+
+## 15. Syntax Check and Activation Rule
+
+Recommended validation sequence:
+
+```text
+1. Run local source cleanup
+2. INSERT REPORT
+3. GENERATE REPORT
+4. If success: display source or open SE38
+5. If failure: show compile error and generated source
+6. Optional: send error back to AI repair prompt
+```
+
+Final judgment:
+
+```text
+GENERATE REPORT is the final activation validation.
+```
+
+---
+
+## 16. Recommended Success Behavior
+
+If generated code compiles successfully, ZAICODING may support two modes.
+
+### Mode A: SE38 Auto Launch
+
+```text
+Compile success → open SE38 with generated program
+```
+
+### Mode B: Source Viewer + Download
+
+```text
+Compile success → show generated source on screen
+               → provide download button
+               → default file name = generated program name
+```
+
+Recommended for current ZAICODING direction:
+
+```text
+Use Mode B as the default.
+Do not jump to SE38 automatically after success.
+Show the generated ABAP source and provide download.
+```
+
+---
+
+## 17. Prompt Input Recommendation
+
+For complex generation, one-line prompt input is not enough.
+
+Recommended screen design:
+
+```text
+Screen 0100
+Custom Control: CC_PROMPT
+CL_GUI_TEXTEDIT for long prompt entry
+```
+
+Alternative simple design:
+
+```text
+Prompt line 1
+Prompt line 2
+...
+Prompt line 10
+```
+
+Merge rule:
+
+```text
+Merge non-empty prompt lines with newline.
+Use merged prompt as the final user request.
+Save merged prompt in generated source header as comment.
+```
+
+---
+
+## 18. Prompt History Recommendation
+
+ZAICODING should save successful prompts.
+
+Recommended fields:
+
+```text
+timestamp
+program name
+user prompt
+model
+status
+compile message
+source preview
+```
+
+Recommended functions:
+
+- save successful prompt
+- show recent prompt list
+- reload selected prompt
+- reuse prompt for regeneration
+- optionally show failed prompts for learning
+
+---
+
+## 19. Generated Source Header Rule
+
+Generated ABAP should include the original user prompt as a comment at the top.
+
+Example:
+
+```abap
+REPORT zai_260503_1201.
+
+*---------------------------------------------------------------------*
+* Generated by ZAICODING
+* User Prompt:
+* 고객마스터 10개를 ALV로 보여줘
+*---------------------------------------------------------------------*
+```
+
+Do not put API keys or secrets in generated source comments.
+
+---
+
+## 20. OpenAI Responses API Setup
+
+### SM59
+
+Recommended destination:
+
+```text
+Destination name: ZOPENAI
+Host: api.openai.com
+Path prefix: /v1/responses
+Protocol: HTTPS
+```
+
+### STRUST
+
+Required:
+
+```text
+Import and trust the required certificate chain for api.openai.com.
+```
+
+### HTTP Header
+
+Required headers:
+
+```text
+Authorization: Bearer <API_KEY>
+Content-Type: application/json; charset=utf-8
+```
+
+### Encoding
+
+Recommended:
+
+- send JSON as UTF-8
+- avoid BOM
+- inspect HTTP status and response body on failure
+
+---
+
+## 21. JSON Parsing Recommendation
+
+Recommended next upgrade:
+
+```text
+Use /UI2/CL_JSON for structured parsing of Responses API JSON.
+```
+
+Avoid fragile parsing when possible.
+
+Fallback extraction may still be kept for emergency cases.
+
+---
+
+## 22. Recommended Repair Prompt
+
+When `GENERATE REPORT` fails, send a repair request to the model.
+
+Recommended repair prompt structure:
+
+```text
+The following ABAP source failed to compile in SAP S/4HANA 2022 ABAP 7.56.
+
+Compile error:
+<error text>
+
+Rules:
+- Return one complete runnable ABAP REPORT only.
+- Do not use markdown.
+- Do not explain.
+- Keep exactly one REPORT statement.
+- Use only confirmed DDIC fields.
+- Use CL_SALV_TABLE=>FACTORY for ALV.
+- Do not include ABAP_START or ABAP_END in the final SE38 source.
+
+Source:
+<generated source>
+```
+
+---
+
+## 23. Practical Prompt Templates
+
+### 23.1 Customer Master
+
+```text
+고객마스터 10개를 조회해서 KUNNR, NAME1, LAND1을 ALV로 보여줘.
+ABAP 7.56 기준으로 만들고 CL_SALV_TABLE=>FACTORY를 사용해줘.
+```
+
+### 23.2 Material Master by Material Type
+
+```text
+자재유형 HAWA인 자재 10개를 MATNR, MTART, MATKL, MEINS 기준으로 ALV 표시해줘.
+```
+
+### 23.3 All Material Fields
+
+```text
+MARA 전체 필드를 100건만 ALV로 보여줘.
+전체 필드 요청이므로 실제 DDIC 타입을 사용해줘.
+```
+
+### 23.4 Purchase Order Amount Ranking
+
+```text
+구매조직 1000 기준 구매오더를 금액 순으로 ALV 표시해줘.
+구매오더 번호, 벤더, 회사코드, 구매조직, 통화, 금액을 보여줘.
+```
+
+### 23.5 Function Module to TCODE
+
+```text
+Function Module 이름을 select-options로 입력받아서,
+그 Function Module을 CALL FUNCTION으로 직접 호출하는 TCODE를 찾아주는 ABAP 리포트를 만들어줘.
+TSTC, TSTCT, TFDIR, D010INC, READ REPORT 기준으로 구현해줘.
+결과는 TCODE, TCODE 설명, 시작프로그램, 발견된 INCLUDE, 라인번호, 소스라인을 ALV로 보여줘.
+동적 호출은 제외해줘.
+```
+
+---
+
+## 24. Troubleshooting Checklist
+
+### Duplicate REPORT Error
+
+Symptom:
+
+```text
+Each ABAP program can contain only one REPORT, PROGRAM, or FUNCTION-POOL statement.
+```
+
+Fix:
+
+```text
+Remove duplicate REPORT/PROGRAM/FUNCTION-POOL statements.
+```
+
+---
+
+### Invalid Host Literal
+
+Wrong:
+
+```abap
+WHERE mtart = @'FERT'
+```
+
+Fix:
+
+```abap
+WHERE mtart = 'FERT'
+```
+
+---
+
+### Invalid DDIC Field
+
+Symptom:
+
+```text
+No component exists with the name ...
+```
+
+Fix:
+
+```text
+Check DD03L.
+Use only confirmed DDIC fields.
+Do not invent fields.
+```
+
+---
+
+### SALV Creation Error
+
+Symptom:
+
+```text
+An instance of CL_SALV_TABLE cannot be created outside the class.
+```
+
+Fix:
+
+```abap
+cl_salv_table=>factory(
+  IMPORTING r_salv_table = lo_alv
+  CHANGING  t_table      = lt_data ).
+```
+
+---
+
+### ABAP_START / ABAP_END Appears in SE38
+
+Fix:
+
+```text
+Remove ABAP_START and ABAP_END before INSERT REPORT.
+They are extraction markers only.
+```
+
+---
+
+### DNUM Appears
+
+Fix:
+
+```text
+Treat as hallucination unless confirmed by DDIC.
+Reject or regenerate.
+```
+
+---
+
+### TFDIR Used as Field
+
+Fix:
+
+```text
+Use TFDIR-FUNCNAME and TFDIR-PNAME only when confirmed.
+Do not use TFDIR as a component name.
+```
+
+---
+
+## 25. Recommended Next Upgrade Priority
+
+1. **Source Viewer + Download Button** after successful compile
+2. **Prompt History Save / Reload**
+3. **Structured Responses API parsing with `/UI2/CL_JSON`**
+4. **Generator → Validator → Repair double-pass flow**
+5. **DDIC metadata injection for detected main table**
+6. **Repository-analysis prompt templates**
+7. **Failure learning log** for repeated compile errors
+
+---
+
+## 26. Final Operating Principle
+
+ZAICODING should follow this principle:
+
+```text
+AI generates.
+ZAICODING verifies.
+ZAICODING repairs.
+GENERATE REPORT decides.
+```
+
+Generation quality is important, but production stability comes from:
+
+```text
+Fixed Base Prompt
++ DDIC Metadata
++ Auto-Fix Engine
++ GENERATE REPORT
++ Repair Loop
+```
+
+---
+
 ## Maintainer
+
 Chimoo Lee
