@@ -384,6 +384,36 @@ For maximum stability, the next upgrade should be:
 - If the user asks for all fields, prefer the real DDIC type instead of a huge hand-written local structure.
 
 ---
+# ABAP AI Coding Standards for SAP S/4HANA 2022
+
+To ensure successful code generation and prevent activation failures, the AI must strictly follow these coding patterns.
+
+## 1. Selection Screen & Table Declarations (CRITICAL)
+- **Mandatory TABLES Statement**: When using `SELECT-OPTIONS`, you **MUST** declare the referenced table at the very top of the report using the `TABLES` statement.
+  - **Correct**: 
+    ```abap
+    REPORT z_example.
+    TABLES: vbak. " Required for SELECT-OPTIONS
+    SELECT-OPTIONS: s_vkorg FOR vbak-vkorg.
+    ```
+- **Field Reference**: For `PARAMETERS`, prefer using Data Elements directly to avoid unnecessary `TABLES` dependencies.
+  - **Correct**: `PARAMETERS: p_werks TYPE werks_d.`
+
+## 2. Open SQL Syntax (ABAP 7.56+)
+- **Tilde (~) vs Hyphen (-)**:
+  - Inside **Open SQL** statements, use **Tilde (~)**: `SELECT vbak~vbeln FROM vbak...`
+  - In **DATA/TYPES** declarations, use **Hyphen (-)**: `DATA ls_vbak TYPE vbak.`
+- **Host Variables**: Always use `@` for all host variables in Open SQL (e.g., `WHERE vkorg IN @s_vkorg`).
+
+## 3. Class Structure & ALV
+- **Class Pattern**: Use a local final class `lcl_app` with a static method `run`.
+- **Logic**: All processing logic must be encapsulated within the class.
+- **ALV**: Use `CL_SALV_TABLE=>FACTORY` for output. Never use `REUSE_ALV_*` function modules.
+
+## 4. Error Prevention Rules
+- **No MANDT**: Never include the client field (`MANDT`) in SQL conditions.
+- **No Text Symbols**: Use string literals or constants instead of `TEXT-001`.
+- **Activation Safety**: Ensure all variables referenced in the selection screen are declared before the class definition.
 
 ## Maintainer
 Chimoo Lee
