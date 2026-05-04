@@ -148,8 +148,8 @@ CLASS lcl_app IMPLEMENTATION.
 
       READ TABLE lt_mov WITH KEY matnr = ls_key-matnr
                                    werks = ls_key-werks
-        TRANSPORTING NO FIELDS
-        BINARY SEARCH.
+           TRANSPORTING NO FIELDS
+           BINARY SEARCH.
       IF sy-subrc <> 0 AND ls_res-qty <> 0.
         ls_res-status = '재고만 있음'.
       ELSE.
