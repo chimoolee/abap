@@ -76,14 +76,12 @@ CLASS lcl_app IMPLEMENTATION.
       DATA(lv_has_mov) = abap_false.
       DATA(lv_has_stk) = abap_false.
 
-      READ TABLE lt_mov_s WITH TABLE KEY table_line = <ls_attr>-matnr
-           TRANSPORTING NO FIELDS.
+      READ TABLE lt_mov_s WITH TABLE KEY table_line = <ls_attr>-matnr TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_has_mov = abap_true.
       ENDIF.
 
-      READ TABLE lt_stock_s WITH TABLE KEY table_line = <ls_attr>-matnr
-           TRANSPORTING NO FIELDS.
+      READ TABLE lt_stock_s WITH TABLE KEY table_line = <ls_attr>-matnr TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_has_stk = abap_true.
       ENDIF.
@@ -231,20 +229,17 @@ CLASS lcl_app IMPLEMENTATION.
     FIELD-SYMBOLS <ls_txt> TYPE ty_txt.
 
     LOOP AT lt_comp ASSIGNING <ls_comp>.
-      READ TABLE lt_cmov_s WITH TABLE KEY table_line = <ls_comp>-matnr
-           TRANSPORTING NO FIELDS.
+      READ TABLE lt_cmov_s WITH TABLE KEY table_line = <ls_comp>-matnr TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         CONTINUE.
       ENDIF.
-      READ TABLE lt_cstk_s WITH TABLE KEY table_line = <ls_comp>-matnr
-           TRANSPORTING NO FIELDS.
+      READ TABLE lt_cstk_s WITH TABLE KEY table_line = <ls_comp>-matnr TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         CONTINUE.
       ENDIF.
 
       DATA(lv_parent) = VALUE mara-matnr( ).
-      READ TABLE lt_map WITH KEY stlnr = <ls_comp>-stlnr
-           ASSIGNING FIELD-SYMBOL(<ls_map>).
+      READ TABLE lt_map WITH KEY stlnr = <ls_comp>-stlnr ASSIGNING FIELD-SYMBOL(<ls_map>).
       IF sy-subrc = 0.
         lv_parent = <ls_map>-matnr.
       ENDIF.
