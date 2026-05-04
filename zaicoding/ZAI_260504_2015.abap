@@ -3,7 +3,7 @@ REPORT ZAI_260504_2015.
 TABLES mara.
 
 SELECT-OPTIONS:
-  s_budat FOR mkpf-budat,
+  s_budat TYPE datum,
   s_werks FOR mseg-werks,
   s_matnr FOR mara-matnr.
 
@@ -57,7 +57,7 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lv_stock   TYPE mard-labst.
     DATA lo_alv     TYPE REF TO cl_salv_table.
 
-* Movement keys (MSEG + MKPF with MKPF~BUDAT)
+* Movement keys (MSEG + MKPF~BUDAT with optional filters)
     IF s_budat IS INITIAL AND s_werks IS INITIAL AND s_matnr IS INITIAL.
       SELECT DISTINCT
         mseg~matnr,
@@ -202,7 +202,7 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
 
-* Apply material filter from s_matnr (safety, if not already applied)
+* Apply material filter from s_matnr (safety)
     IF s_matnr IS NOT INITIAL.
       DELETE lt_keys WHERE NOT ( matnr IN s_matnr ).
     ENDIF.
@@ -238,4 +238,4 @@ CLASS lcl_app IMPLEMENTATION.
       IF sy-subrc = 0.
         ls_res-mtart = ls_det-mtart.
         ls_res-matkl = ls_det-matkl.
-        ls_res-maktx = ls_det-makt
+        ls_res-maktx = ls_det-maktx.
