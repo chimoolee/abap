@@ -12,7 +12,7 @@ CLASS lcl_app DEFINITION FINAL.
              mtart    TYPE mara-mtart,
              meins    TYPE mara-meins,
              maktx    TYPE makt-maktx,
-             category TYPE char20,
+             category TYPE char30,
            END OF ty_result.
     TYPES ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
     TYPES ty_t_matnr  TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
@@ -38,14 +38,14 @@ CLASS lcl_app IMPLEMENTATION.
       INNER JOIN mkpf AS h
         ON h~mblnr = s~mblnr
        AND h~mjahr = s~mjahr
-     WHERE s~werks = @p_werks
-       AND h~budat IN @s_budat
+      WHERE s~werks = @p_werks
+        AND h~budat IN @s_budat
       INTO TABLE @lt_mat_mov.
 
     SELECT DISTINCT d~matnr
       FROM mard AS d
-     WHERE d~werks = @p_werks
-       AND d~labst > 0
+      WHERE d~werks = @p_werks
+        AND d~labst > 0
       INTO TABLE @lt_mat_stock.
 
     SELECT DISTINCT stpo~idnrk
@@ -54,11 +54,12 @@ CLASS lcl_app IMPLEMENTATION.
         ON mh~matnr = m~matnr
       INNER JOIN stpo AS stpo
         ON stpo~stlnr = m~stlnr
-     WHERE m~werks = @p_werks
-       AND mh~mtart = 'FERT'
+      WHERE m~werks = @p_werks
+        AND mh~mtart = 'FERT'
       INTO TABLE @lt_mat_bomcomp.
 
     LOOP AT lt_mat_mov INTO DATA(lv_matnr_a).
+      CLEAR ls_res.
       ls_res-matnr    = lv_matnr_a.
       ls_res-category = '입출고실적 있음'.
       APPEND ls_res TO lt_final.
@@ -69,6 +70,7 @@ CLASS lcl_app IMPLEMENTATION.
       IF line_exists( lt_all_mat[ table_line = lv_matnr_b ] ).
         CONTINUE.
       ENDIF.
+      CLEAR ls_res.
       ls_res-matnr    = lv_matnr_b.
       ls_res-category = '재고만 있음'.
       APPEND ls_res TO lt_final.
@@ -79,6 +81,7 @@ CLASS lcl_app IMPLEMENTATION.
       IF line_exists( lt_all_mat[ table_line = lv_matnr_c ] ).
         CONTINUE.
       ENDIF.
+      CLEAR ls_res.
       ls_res-matnr    = lv_matnr_c.
       ls_res-category = 'BOM 에 만 있음'.
       APPEND ls_res TO lt_final.
@@ -89,14 +92,14 @@ CLASS lcl_app IMPLEMENTATION.
       SELECT a~matnr, a~mtart, a~meins
         FROM mara AS a
         FOR ALL ENTRIES IN @lt_all_mat
-       WHERE a~matnr = @lt_all_mat-table_line
+        WHERE a~matnr = @lt_all_mat-table_line
         INTO TABLE @DATA(lt_mara).
 
       SELECT t~matnr, t~maktx
         FROM makt AS t
         FOR ALL ENTRIES IN @lt_all_mat
-       WHERE t~matnr = @lt_all_mat-table_line
-         AND t~spras = @sy-langu
+        WHERE t~matnr = @lt_all_mat-table_line
+          AND t~spras = @sy-langu
         INTO TABLE @DATA(lt_makt).
 
       SORT lt_mara BY matnr.
