@@ -46,14 +46,14 @@ CLASS lcl_app DEFINITION FINAL.
 
     CLASS-METHODS get_move_keys
       IMPORTING
-        VALUE(it_werks) TYPE STANDARD TABLE OF werks_d WITH EMPTY KEY
+        VALUE(ir_werks) TYPE RANGE OF t001w-werks
         VALUE(ir_budat) TYPE RANGE OF mkpf-budat
       RETURNING
         VALUE(rt_keys)  TYPE ty_t_key.
 
     CLASS-METHODS get_stock
       IMPORTING
-        VALUE(it_werks) TYPE STANDARD TABLE OF werks_d WITH EMPTY KEY
+        VALUE(ir_werks) TYPE RANGE OF t001w-werks
       RETURNING
         VALUE(rt_stock) TYPE ty_t_stock.
 
@@ -71,29 +71,16 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_keys      TYPE ty_t_key.
     DATA lt_result    TYPE ty_t_result.
 
-    " Collect selected plants into an elementary table
-    TYPES ty_t_werks TYPE STANDARD TABLE OF werks_d WITH EMPTY KEY.
-    DATA lt_werks TYPE ty_t_werks.
+    lt_move_keys = get_move_keys( ir_werks = s_werks ir_budat = s_budat ).
+    lt_stock     = get_stock( ir_werks = s_werks ).
 
-    LOOP AT s_werks ASSIGNING FIELD-SYMBOL(<r_werks>).
-      IF <r_werks>-sign = 'I' AND <r_werks>-option = 'EQ' AND <r_werks>-low IS NOT INITIAL.
-        APPEND <r_werks>-low TO lt_werks.
-      ENDIF.
-    ENDLOOP.
-
-    lt_move_keys = get_move_keys( it_werks = lt_werks ir_budat = s_budat ).
-    lt_stock     = get_stock( it_werks = lt_werks ).
-
-    " Union of keys from moves and stock
     lt_keys = lt_move_keys.
     LOOP AT lt_stock ASSIGNING FIELD-SYMBOL(<ls_s>).
-      DATA(ls_key) = VALUE ty_key( matnr = <ls_s>-matnr werks = <ls_s>-werks ).
-      APPEND ls_key TO lt_keys.
+      APPEND VALUE ty_key( matnr = <ls_s>-matnr werks = <ls_s>-werks ) TO lt_keys.
     ENDLOOP.
     SORT lt_keys BY matnr werks.
     DELETE ADJACENT DUPLICATES FROM lt_keys COMPARING matnr werks.
 
-    " Prepare material number list
     DATA lt_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
     LOOP AT lt_keys ASSIGNING FIELD-SYMBOL(<ls_k>).
       APPEND <ls_k>-matnr TO lt_matnr.
@@ -101,13 +88,11 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_matnr.
     DELETE ADJACENT DUPLICATES FROM lt_matnr.
 
-    " Read material master and text
     DATA lt_mat TYPE ty_t_mat.
     IF lt_matnr IS NOT INITIAL.
       lt_mat = get_materials( lt_matnr ).
     ENDIF.
 
-    " Build hashes for quick lookup
     TYPES:
       BEGIN OF ty_move_flag,
         matnr TYPE mara-matnr,
@@ -115,26 +100,24 @@ CLASS lcl_app IMPLEMENTATION.
       END OF ty_move_flag.
     DATA lt_move_flag TYPE STANDARD TABLE OF ty_move_flag WITH EMPTY KEY.
     LOOP AT lt_move_keys ASSIGNING FIELD-SYMBOL(<ls_mk>).
-      APPEND VALUE ty_move_flag( matnr = <ls_mk>-matnr werks = <ls_mk>-werks ) TO lt_move_flag.
+      APPEND VALUE ty_move_flag(
+        matnr = <ls_mk>-matnr
+        werks = <ls_mk>-werks ) TO lt_move_flag.
     ENDLOOP.
     SORT lt_move_flag BY matnr werks.
     DELETE ADJACENT DUPLICATES FROM lt_move_flag COMPARING matnr werks.
 
-    " Stock lookup by matnr+werks
     SORT lt_stock BY matnr werks.
 
-    " Material info hashed by matnr
     DATA lt_mat_sorted TYPE ty_t_mat.
     lt_mat_sorted = lt_mat.
     SORT lt_mat_sorted BY matnr.
 
-    " Compose result
     LOOP AT lt_keys ASSIGNING <ls_k>.
       DATA(ls_res) = VALUE ty_result( ).
       ls_res-matnr = <ls_k>-matnr.
       ls_res-werks = <ls_k>-werks.
 
-      " Material attributes
       READ TABLE lt_mat_sorted ASSIGNING FIELD-SYMBOL(<ls_mat>)
         WITH KEY matnr = <ls_k>-matnr BINARY SEARCH.
       IF sy-subrc = 0.
@@ -143,7 +126,6 @@ CLASS lcl_app IMPLEMENTATION.
         ls_res-maktx = <ls_mat>-maktx.
       ENDIF.
 
-      " Stock qty
       READ TABLE lt_stock ASSIGNING <ls_s>
         WITH KEY matnr = <ls_k>-matnr werks = <ls_k>-werks BINARY SEARCH.
       IF sy-subrc = 0.
@@ -152,7 +134,6 @@ CLASS lcl_app IMPLEMENTATION.
         CLEAR ls_res-qty.
       ENDIF.
 
-      " Movement flag
       READ TABLE lt_move_flag TRANSPORTING NO FIELDS
         WITH KEY matnr = <ls_k>-matnr werks = <ls_k>-werks BINARY SEARCH.
       IF sy-subrc = 0.
@@ -160,14 +141,12 @@ CLASS lcl_app IMPLEMENTATION.
       ELSEIF ls_res-qty IS NOT INITIAL AND ls_res-qty <> 0.
         ls_res-status = |재고만 있음|.
       ELSE.
-        " Should not occur due to union logic, keep clear just in case
         ls_res-status = |재고만 있음|.
       ENDIF.
 
       APPEND ls_res TO lt_result.
     ENDLOOP.
 
-    " Display ALV
     DATA lo_alv TYPE REF TO cl_salv_table.
     cl_salv_table=>factory(
       IMPORTING
@@ -183,14 +162,12 @@ CLASS lcl_app IMPLEMENTATION.
   METHOD get_move_keys.
     DATA lt_keys TYPE ty_t_key.
 
-    " Select distinct matnr/werks from material documents within criteria
-    SELECT DISTINCT
-      mseg~matnr,
-      mseg~werks
-      FROM mseg
-      INNER JOIN mkpf
-        ON mkpf~mblnr = mseg~mblnr
-       AND mkpf~mjahr = mseg~mjahr
-      INTO TABLE @lt_keys
-      WHERE mkpf~budat IN @ir_budat
-        AND ( @it_werks
+    IF ir_werks IS INITIAL.
+      SELECT DISTINCT
+             mseg~matnr,
+             mseg~werks
+        FROM mseg
+        INNER JOIN mkpf
+          ON mkpf~mblnr = mseg~mblnr
+         AND mkpf~mjahr = mseg~mjahr
+        INTO
