@@ -1,5 +1,7 @@
 REPORT ZAI_260504_1712.
 
+TABLES mara.
+
 PARAMETERS p_begda TYPE sy-datum DEFAULT sy-datum.
 PARAMETERS p_endda TYPE sy-datum DEFAULT sy-datum.
 SELECT-OPTIONS s_werks FOR mseg-werks.
@@ -11,8 +13,8 @@ ENDCLASS.
 
 CLASS lcl_app IMPLEMENTATION.
   METHOD run.
-    DATA: lv_begda TYPE sy-datum VALUE p_begda,
-          lv_endda TYPE sy-datum VALUE p_endda.
+    DATA lv_begda TYPE sy-datum VALUE p_begda.
+    DATA lv_endda TYPE sy-datum VALUE p_endda.
 
     IF lv_begda IS INITIAL OR lv_endda IS INITIAL OR lv_begda > lv_endda.
       MESSAGE '유효한 기간을 입력하세요.' TYPE 'E'.
@@ -59,19 +61,19 @@ CLASS lcl_app IMPLEMENTATION.
            END OF ty_result,
            ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
-    DATA lt_mov         TYPE ty_t_mov.
-    DATA lt_stock       TYPE ty_t_stock.
-    DATA lt_bom_fert    TYPE ty_t_pair.
-    DATA lt_bom_comp    TYPE ty_t_pair.
-    DATA lt_union_keys  TYPE ty_t_pair.
-    DATA lt_result      TYPE ty_t_result.
-    DATA lt_desc        TYPE ty_t_desc.
+    DATA lt_mov        TYPE ty_t_mov.
+    DATA lt_stock      TYPE ty_t_stock.
+    DATA lt_bom_fert   TYPE ty_t_pair.
+    DATA lt_bom_comp   TYPE ty_t_pair.
+    DATA lt_union_keys TYPE ty_t_pair.
+    DATA lt_result     TYPE ty_t_result.
+    DATA lt_desc       TYPE ty_t_desc.
 
     DATA lt_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
     SELECT DISTINCT
-           mseg~matnr,
-           mseg~werks
+      mseg~matnr,
+      mseg~werks
       FROM mseg
       INNER JOIN mkpf
         ON mkpf~mblnr = mseg~mblnr
@@ -90,8 +92,8 @@ CLASS lcl_app IMPLEMENTATION.
         AND mard~labst <> 0.
 
     SELECT DISTINCT
-           mast~matnr,
-           mast~werks
+      mast~matnr,
+      mast~werks
       FROM mast
       INNER JOIN mara
         ON mara~matnr = mast~matnr
@@ -100,8 +102,8 @@ CLASS lcl_app IMPLEMENTATION.
         AND mara~mtart = 'FERT'.
 
     SELECT DISTINCT
-           stpo~idnrk AS matnr,
-           mast~werks AS werks
+      stpo~idnrk AS matnr,
+      mast~werks AS werks
       FROM mast
       INNER JOIN mara AS mh
         ON mh~matnr = mast~matnr
@@ -111,19 +113,17 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE mast~werks IN @s_werks
         AND mh~mtart = 'FERT'.
 
-    DATA lt_key_mov TYPE ty_t_pair.
+    DATA lt_key_mov   TYPE ty_t_pair.
     DATA lt_key_stock TYPE ty_t_pair.
 
-    lt_key_mov = CORRESPONDING ty_t_pair( lt_mov ).
+    lt_key_mov   = CORRESPONDING ty_t_pair( lt_mov ).
     lt_key_stock = CORRESPONDING ty_t_pair( lt_stock ).
 
-    " Build union keys from movement and stock > 0
     lt_union_keys = lt_key_mov.
     APPEND LINES OF lt_key_stock TO lt_union_keys.
     SORT lt_union_keys BY matnr werks.
     DELETE ADJACENT DUPLICATES FROM lt_union_keys COMPARING matnr werks.
 
-    " Hash helpers
     TYPES: BEGIN OF ty_hash,
              matnr TYPE mara-matnr,
              werks TYPE werks_d,
@@ -131,35 +131,27 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_h_mov   TYPE HASHED TABLE OF ty_hash WITH UNIQUE KEY matnr werks.
     DATA lt_h_stock TYPE HASHED TABLE OF ty_hash WITH UNIQUE KEY matnr werks.
 
-    lt_h_mov = CORRESPONDING #( lt_key_mov ).
+    lt_h_mov   = CORRESPONDING #( lt_key_mov ).
     lt_h_stock = CORRESPONDING #( lt_key_stock ).
 
-    " Stock lookup by key
     DATA lt_h_stock_val TYPE HASHED TABLE OF ty_stock WITH UNIQUE KEY matnr werks.
     lt_h_stock_val = lt_stock.
 
-    " Build MAIN section rows
     LOOP AT lt_union_keys INTO DATA(ls_key).
       DATA(ls_res) = VALUE ty_result(
-        section  = 'MAIN'
-        matnr    = ls_key-matnr
-        werks    = ls_key-werks
-        has_mov  = COND #( WHEN line_exists( lt_h_mov[ matnr = ls_key-matnr
-                                                       werks = ls_key-werks ] )
-                           THEN abap_true ELSE abap_false )
-        labst    = VALUE mard-labst(
-                      LET ls_s = VALUE ty_stock(
-                                   ) IN
-                      0 ) ).
+        section = 'MAIN'
+        matnr   = ls_key-matnr
+        werks   = ls_key-werks
+        has_mov = COND #( WHEN line_exists(
+                              lt_h_mov[ matnr = ls_key-matnr
+                                        werks = ls_key-werks ] )
+                          THEN abap_true ELSE abap_false )
+        labst   = 0 ).
 
-      READ TABLE lt_h_stock_val TRANSPORTING NO FIELDS
-           WITH TABLE KEY matnr = ls_key-matnr werks = ls_key-werks.
+      READ TABLE lt_h_stock_val INTO DATA(ls_stock_v)
+        WITH TABLE KEY matnr = ls_key-matnr werks = ls_key-werks.
       IF sy-subrc = 0.
-        READ TABLE lt_h_stock_val INTO DATA(ls_stock)
-             WITH TABLE KEY matnr = ls_key-matnr werks = ls_key-werks.
-        IF sy-subrc = 0.
-          ls_res-labst = ls_stock-labst.
-        ENDIF.
+        ls_res-labst = ls_stock_v-labst.
       ENDIF.
 
       IF ls_res-has_mov = abap_true AND ls_res-labst <> 0.
@@ -173,26 +165,25 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_res TO lt_result.
     ENDLOOP.
 
-    " Add BOM section for FERT with BOM
     LOOP AT lt_bom_fert INTO DATA(ls_fert).
       DATA(ls_res_f) = VALUE ty_result(
-         section  = 'BOM'
-         category = '완제품(BOM있음)'
-         matnr    = ls_fert-matnr
-         werks    = ls_fert-werks
-         has_mov  = COND #( WHEN line_exists( lt_h_mov[ matnr = ls_fert-matnr
-                                                        werks = ls_fert-werks ] )
-                            THEN abap_true ELSE abap_false )
-         labst    = VALUE mard-labst( 0 ) ).
-      READ TABLE lt_h_stock_val INTO ls_stock
-           WITH TABLE KEY matnr = ls_fert-matnr werks = ls_fert-werks.
+        section  = 'BOM'
+        category = '완제품(BOM있음)'
+        matnr    = ls_fert-matnr
+        werks    = ls_fert-werks
+        has_mov  = COND #( WHEN line_exists(
+                               lt_h_mov[ matnr = ls_fert-matnr
+                                         werks = ls_fert-werks ] )
+                           THEN abap_true ELSE abap_false )
+        labst    = 0 ).
+      READ TABLE lt_h_stock_val INTO ls_stock_v
+        WITH TABLE KEY matnr = ls_fert-matnr werks = ls_fert-werks.
       IF sy-subrc = 0.
-        ls_res_f-labst = ls_stock-labst.
+        ls_res_f-labst = ls_stock_v-labst.
       ENDIF.
       APPEND ls_res_f TO lt_result.
     ENDLOOP.
 
-    " BOM-only components (no stock, no movements)
     LOOP AT lt_bom_comp INTO DATA(ls_comp).
       IF line_exists( lt_h_mov[ matnr = ls_comp-matnr werks = ls_comp-werks ] ).
         CONTINUE.
@@ -202,24 +193,23 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
 
       DATA(ls_res_c) = VALUE ty_result(
-         section  = 'BOM'
-         category = 'BOM 에 만 있음'
-         matnr    = ls_comp-matnr
-         werks    = ls_comp-werks
-         has_mov  = abap_false
-         labst    = 0 ).
+        section  = 'BOM'
+        category = 'BOM 에 만 있음'
+        matnr    = ls_comp-matnr
+        werks    = ls_comp-werks
+        has_mov  = abap_false
+        labst    = 0 ).
       APPEND ls_res_c TO lt_result.
     ENDLOOP.
 
-    " Collect material list for description fetch
     DELETE ADJACENT DUPLICATES FROM lt_result COMPARING matnr werks section category.
+
     LOOP AT lt_result INTO DATA(ls_r2).
       APPEND ls_r2-matnr TO lt_matnr.
     ENDLOOP.
     SORT lt_matnr.
     DELETE ADJACENT DUPLICATES FROM lt_matnr.
 
-    " Fetch descriptions using safe template join
     IF lt_matnr IS NOT INITIAL.
       SELECT
         mara~matnr,
@@ -234,9 +224,31 @@ CLASS lcl_app IMPLEMENTATION.
         WHERE mara~matnr IN @lt_matnr.
     ENDIF.
 
-    " Map descriptions back
     DATA lt_h_desc TYPE HASHED TABLE OF ty_desc WITH UNIQUE KEY matnr.
     lt_h_desc = lt_desc.
 
     LOOP AT lt_result INTO ls_r2.
-      READ TABLE lt_h_desc INTO DATA
+      READ TABLE lt_h_desc INTO DATA(ls_d)
+        WITH TABLE KEY matnr = ls_r2-matnr.
+      IF sy-subrc = 0.
+        ls_r2-mtart = ls_d-mtart.
+        ls_r2-matkl = ls_d-matkl.
+        ls_r2-maktx = ls_d-maktx.
+      ENDIF.
+      MODIFY lt_result FROM ls_r2.
+    ENDLOOP.
+
+    DATA lo_alv TYPE REF TO cl_salv_table.
+    cl_salv_table=>factory(
+      IMPORTING
+        r_salv_table = lo_alv
+      CHANGING
+        t_table      = lt_result ).
+
+    lo_alv->get_functions( )->set_all( abap_true ).
+    lo_alv->display( ).
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  lcl_app=>run( ).
