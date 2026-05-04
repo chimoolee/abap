@@ -140,8 +140,8 @@ CLASS lcl_app IMPLEMENTATION.
       READ TABLE lt_attr ASSIGNING FIELD-SYMBOL(<ls_a>)
         WITH KEY matnr = <ls_k>-matnr.
       DATA(lv_status) = COND #( WHEN <ls_k>-has_mvt = abap_true
-                                THEN '입출고 있음'
-                                ELSE '재고만 있음' ).
+                                 THEN '입출고 있음'
+                                 ELSE '재고만 있음' ).
       APPEND VALUE ty_result(
         matnr       = <ls_k>-matnr
         werks       = <ls_k>-werks
