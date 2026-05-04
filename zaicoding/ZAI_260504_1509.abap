@@ -19,15 +19,15 @@ CLASS lcl_app IMPLEMENTATION.
 
     TYPES: ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
-    " Movement materials in period and plant
+    " Movement materials in period and plant (MATDOC)
     DATA lt_mov_mats TYPE ty_t_matnr.
-    SELECT DISTINCT mseg~matnr
-      FROM mseg AS mseg
-      WHERE mseg~werks = @p_werks
-        AND mseg~budat BETWEEN @p_begda AND @p_endda
+    SELECT DISTINCT matdoc~matnr
+      FROM matdoc AS matdoc
+      WHERE matdoc~werks = @p_werks
+        AND matdoc~budat_mkpf BETWEEN @p_begda AND @p_endda
       INTO TABLE @lt_mov_mats.
 
-    " Current stock per material in plant
+    " Current stock per material in plant (sum of MARD-LABST)
     TYPES: BEGIN OF ty_stock,
              matnr TYPE mara-matnr,
              werks TYPE werks_d,
@@ -88,7 +88,7 @@ CLASS lcl_app IMPLEMENTATION.
         INTO TABLE @lt_makt.
     ENDIF.
 
-    " Helper sets for quick lookups
+    " Helper set for quick lookups (movement or stock)
     DATA lt_have_any TYPE ty_t_matnr.
     lt_have_any = lt_mov_mats.
     APPEND LINES OF lt_tmp_mats TO lt_have_any.
@@ -175,7 +175,6 @@ CLASS lcl_app IMPLEMENTATION.
         AND mara~mtart = 'FERT'
       INTO TABLE @lt_hdr_mats.
 
-    " Header outputs
     TYPES ty_t_out2 TYPE STANDARD TABLE OF ty_out WITH EMPTY KEY.
     DATA lt_out2 TYPE ty_t_out2.
 
