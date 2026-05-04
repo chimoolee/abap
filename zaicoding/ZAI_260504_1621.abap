@@ -38,7 +38,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA lo_alv TYPE REF TO cl_salv_table.
 
-    " 1) Materials with movements in period for plant
+*   1) Materials with movements in period for plant
     SELECT DISTINCT mseg~matnr
       FROM mseg AS mseg
       INNER JOIN mkpf AS mkpf
@@ -48,20 +48,20 @@ CLASS lcl_app IMPLEMENTATION.
        AND mkpf~budat IN @s_budat
       INTO TABLE @lt_mov_mat.
 
-    " 2) Materials with current stock <> 0 in plant
+*   2) Materials with current stock <> 0 in plant
     SELECT mard~matnr, mard~labst
       FROM mard AS mard
      WHERE mard~werks = @p_werks
        AND mard~labst <> 0
       INTO TABLE @lt_stock.
 
-    " Derive stock material list
+*   Derive stock material list
     DATA ls_stock LIKE LINE OF lt_stock.
     LOOP AT lt_stock INTO ls_stock.
       APPEND ls_stock-matnr TO lt_stock_mat.
     ENDLOOP.
 
-    " 3) Finished goods with BOM in plant
+*   3) Finished goods with BOM in plant
     SELECT DISTINCT mast~matnr
       FROM mast AS mast
       INNER JOIN mara AS mara
@@ -70,7 +70,7 @@ CLASS lcl_app IMPLEMENTATION.
        AND mara~mtart = 'FERT'
       INTO TABLE @lt_bom_fg.
 
-    " 4) BOM component materials for BOMs assigned in plant
+*   4) BOM component materials for BOMs assigned in plant
     SELECT DISTINCT stpo~idnrk
       FROM mast AS mast
       INNER JOIN stpo AS stpo
@@ -80,7 +80,7 @@ CLASS lcl_app IMPLEMENTATION.
        AND stpo~idnrk <> ''
       INTO TABLE @lt_bom_comp.
 
-    " Build sets for fast lookup
+*   Build sets for fast lookup
     DATA lt_mov_set     TYPE HASHED TABLE OF mara-matnr WITH UNIQUE KEY table_line.
     DATA lt_stock_set   TYPE HASHED TABLE OF mara-matnr WITH UNIQUE KEY table_line.
     DATA lt_bom_fg_set  TYPE HASHED TABLE OF mara-matnr WITH UNIQUE KEY table_line.
@@ -91,7 +91,7 @@ CLASS lcl_app IMPLEMENTATION.
     lt_bom_fg_set  = lt_bom_fg.
     lt_bom_cmp_set = lt_bom_comp.
 
-    " Result: 1) Movement exists (category A)
+*   Result: 1) Movement exists
     DATA ls_row TYPE ty_row.
     DATA lv_stock_qty TYPE mard-labst.
     DATA lv_matnr TYPE mara-matnr.
@@ -112,7 +112,7 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_row TO lt_result.
     ENDLOOP.
 
-    " 2) Stock only (no movement) (category B)
+*   2) Stock only (no movement)
     LOOP AT lt_stock INTO ls_stock.
       READ TABLE lt_mov_set WITH TABLE KEY table_line = ls_stock-matnr
            TRANSPORTING NO FIELDS.
@@ -129,7 +129,7 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
 
-    " 3) BOM only components (no movement, no stock) (category C)
+*   3) BOM only components (no movement, no stock)
     LOOP AT lt_bom_comp INTO lv_matnr.
       READ TABLE lt_mov_set WITH TABLE KEY table_line = lv_matnr
            TRANSPORTING NO FIELDS.
@@ -150,14 +150,25 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_row TO lt_result.
     ENDLOOP.
 
-    " Collect all materials for text fetch
+*   Collect all materials for text fetch
     LOOP AT lt_result INTO ls_row.
       APPEND ls_row-matnr TO lt_all_mat.
     ENDLOOP.
     SORT lt_all_mat.
     DELETE ADJACENT DUPLICATES FROM lt_all_mat.
 
-    " Fetch material descriptions
+*   Build range for MATNR to avoid IN row type issues
+    DATA lr_matnr TYPE RANGE OF mara-matnr.
+    DATA ls_r TYPE LINE OF lr_matnr.
+    LOOP AT lt_all_mat INTO lv_matnr.
+      CLEAR ls_r.
+      ls_r-sign = 'I'.
+      ls_r-option = 'EQ'.
+      ls_r-low = lv_matnr.
+      APPEND ls_r TO lr_matnr.
+    ENDLOOP.
+
+*   Fetch material descriptions
     TYPES: BEGIN OF ty_makt,
              matnr TYPE mara-matnr,
              maktx TYPE makt-maktx,
@@ -165,15 +176,15 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_makt TYPE STANDARD TABLE OF ty_makt WITH EMPTY KEY.
     DATA ls_makt TYPE ty_makt.
 
-    IF lt_all_mat IS NOT INITIAL.
+    IF lr_matnr IS NOT INITIAL.
       SELECT makt~matnr, makt~maktx
         FROM makt AS makt
-       WHERE makt~matnr IN @lt_all_mat
+       WHERE makt~matnr IN @lr_matnr
          AND makt~spras = @sy-langu
         INTO TABLE @lt_makt.
     ENDIF.
 
-    " Map texts
+*   Map texts
     SORT lt_makt BY matnr.
     LOOP AT lt_result INTO ls_row.
       READ TABLE lt_makt INTO ls_makt WITH KEY matnr = ls_row-matnr
@@ -184,7 +195,7 @@ CLASS lcl_app IMPLEMENTATION.
       MODIFY lt_result FROM ls_row.
     ENDLOOP.
 
-    " Display with SALV
+*   Display with SALV
     cl_salv_table=>factory(
       IMPORTING
         r_salv_table = lo_alv
