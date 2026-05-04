@@ -45,7 +45,7 @@ TYPES:
     matkl     TYPE mara-matkl,
     maktx     TYPE makt-maktx,
     stock_qty TYPE mard-labst,
-    status    TYPE char20,
+    status    TYPE c LENGTH 20,
   END OF ty_result,
   ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
@@ -73,7 +73,6 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA lo_alv TYPE REF TO cl_salv_table.
 
-* Materials with goods movements in selected period and plant
     SELECT DISTINCT
       m~matnr,
       m~werks
@@ -86,7 +85,6 @@ CLASS lcl_app IMPLEMENTATION.
         AND m~werks IN @s_werks
         AND m~matnr IS NOT INITIAL.
 
-* Current stock (> 0) by MATNR+WERKS
     SELECT
       mard~matnr,
       mard~werks,
@@ -97,7 +95,6 @@ CLASS lcl_app IMPLEMENTATION.
         AND mard~labst > 0
         AND mard~matnr IS NOT INITIAL.
 
-* Aggregate stock by MATNR+WERKS
     SORT lt_stock_raw BY matnr werks.
     CLEAR ls_stock_s.
     LOOP AT lt_stock_raw INTO ls_stock_r.
@@ -116,7 +113,6 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_stock_s TO lt_stock_sum.
     ENDIF.
 
-* Build union of pairs (movement + stock)
     LOOP AT lt_move INTO ls_move.
       ls_pair-matnr = ls_move-matnr.
       ls_pair-werks = ls_move-werks.
@@ -130,7 +126,6 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_union BY matnr werks.
     DELETE ADJACENT DUPLICATES FROM lt_union COMPARING matnr werks.
 
-* Prepare material list for attribute/text read
     DATA lv_matnr TYPE mara-matnr.
     LOOP AT lt_union INTO ls_pair.
       lv_matnr = ls_pair-matnr.
@@ -139,7 +134,6 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_matnr.
     DELETE ADJACENT DUPLICATES FROM lt_matnr.
 
-* Read material attributes and text
     SELECT
       mara~matnr,
       mara~mtart,
@@ -156,7 +150,6 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_move BY matnr werks.
     SORT lt_stock_sum BY matnr werks.
 
-* Compose result
     LOOP AT lt_union INTO ls_pair.
       CLEAR ls_result.
       ls_result-matnr = ls_pair-matnr.
@@ -173,8 +166,8 @@ CLASS lcl_app IMPLEMENTATION.
       DATA(lv_has_move) = abap_false.
       READ TABLE lt_move WITH KEY matnr = ls_pair-matnr
                                    werks = ls_pair-werks
-                                   TRANSPORTING NO FIELDS
-                                   BINARY SEARCH.
+           TRANSPORTING NO FIELDS
+           BINARY SEARCH.
       IF sy-subrc = 0.
         lv_has_move = abap_true.
       ENDIF.
@@ -201,7 +194,6 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_result TO lt_result.
     ENDLOOP.
 
-* Display ALV
     cl_salv_table=>factory(
       IMPORTING
         r_salv_table = lo_alv
