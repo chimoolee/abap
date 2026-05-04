@@ -17,19 +17,17 @@ CLASS lcl_app IMPLEMENTATION.
       MESSAGE '시작일이 종료일보다 클 수 없습니다.' TYPE 'E'.
     ENDIF.
 
-    TYPES: ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    TYPES ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
-    " Movement materials in period and plant (MATDOC + MKPF for date)
+    " Materials with movements in period and plant (MATDOC)
     DATA lt_mov_mats TYPE ty_t_matnr.
     SELECT DISTINCT m~matnr
       FROM matdoc AS m
-      INNER JOIN mkpf AS k
-        ON k~mblnr = m~mblnr AND k~mjahr = m~mjahr
       WHERE m~werks = @p_werks
-        AND k~budat BETWEEN @p_begda AND @p_endda
+        AND m~budat_mkpf BETWEEN @p_begda AND @p_endda
       INTO TABLE @lt_mov_mats.
 
-    " Current stock per material in plant (sum of MARD-LABST)
+    " Current stock per material in plant (MARD)
     TYPES: BEGIN OF ty_stock,
              matnr TYPE mara-matnr,
              werks TYPE werks_d,
@@ -47,7 +45,7 @@ CLASS lcl_app IMPLEMENTATION.
       HAVING SUM( mard~labst ) <> 0
       INTO TABLE @lt_stock.
 
-    " Union of materials to show
+    " Union of materials from movement and stock
     DATA lt_all_mats TYPE ty_t_matnr.
     lt_all_mats = lt_mov_mats.
     DATA lt_tmp_mats TYPE ty_t_matnr.
@@ -56,7 +54,7 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_all_mats BY table_line.
     DELETE ADJACENT DUPLICATES FROM lt_all_mats COMPARING table_line.
 
-    " Basic material master and text
+    " Material master and text
     TYPES: BEGIN OF ty_mara_s,
              matnr TYPE mara-matnr,
              mtart TYPE mara-mtart,
@@ -89,13 +87,6 @@ CLASS lcl_app IMPLEMENTATION.
           AND makt~spras = @sy-langu
         INTO TABLE @lt_makt.
     ENDIF.
-
-    " Helper set for quick lookups (movement or stock)
-    DATA lt_have_any TYPE ty_t_matnr.
-    lt_have_any = lt_mov_mats.
-    APPEND LINES OF lt_tmp_mats TO lt_have_any.
-    SORT lt_have_any BY table_line.
-    DELETE ADJACENT DUPLICATES FROM lt_have_any COMPARING table_line.
 
     " Output 1: General list
     TYPES: BEGIN OF ty_out,
@@ -136,7 +127,7 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
 
       READ TABLE lt_mov_mats WITH KEY table_line = <mat>
-           TRANSPORTING NO FIELDS.
+        TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         ls_out-has_mov = abap_true.
       ELSE.
@@ -203,7 +194,7 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
 
       READ TABLE lt_mov_mats WITH KEY table_line = <mat>
-           TRANSPORTING NO FIELDS.
+        TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         ls2-has_mov = abap_true.
       ELSE.
@@ -237,9 +228,16 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_comp_mats BY table_line.
     DELETE ADJACENT DUPLICATES FROM lt_comp_mats COMPARING table_line.
 
+    " Helper set: materials that have movement or stock
+    DATA lt_have_any TYPE ty_t_matnr.
+    lt_have_any = lt_mov_mats.
+    APPEND LINES OF lt_tmp_mats TO lt_have_any.
+    SORT lt_have_any BY table_line.
+    DELETE ADJACENT DUPLICATES FROM lt_have_any COMPARING table_line.
+
     LOOP AT lt_comp_mats ASSIGNING <mat>.
       READ TABLE lt_have_any WITH KEY table_line = <mat>
-           TRANSPORTING NO FIELDS.
+        TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         CONTINUE.
       ENDIF.
