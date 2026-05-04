@@ -53,17 +53,20 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_union TYPE ty_t_matnr.
     lt_union = lt_move_matnr.
     LOOP AT lt_stock ASSIGNING FIELD-SYMBOL(<ls_stk>).
-      DATA(lv_exists) = abap_false.
       READ TABLE lt_union WITH KEY table_line = <ls_stk>-matnr TRANSPORTING NO FIELDS.
-      IF sy-subrc = 0.
-        lv_exists = abap_true.
-      ENDIF.
-      IF lv_exists = abap_false.
+      IF sy-subrc <> 0.
         APPEND <ls_stk>-matnr TO lt_union.
       ENDIF.
     ENDLOOP.
     SORT lt_union.
     DELETE ADJACENT DUPLICATES FROM lt_union.
+
+    " Range for union list
+    DATA lr_union TYPE RANGE OF mara-matnr.
+    CLEAR lr_union.
+    LOOP AT lt_union ASSIGNING FIELD-SYMBOL(<lv_um>).
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = <lv_um> ) TO lr_union.
+    ENDLOOP.
 
     " Material master and text for main list
     TYPES: BEGIN OF ty_mat,
@@ -74,7 +77,7 @@ CLASS lcl_app IMPLEMENTATION.
     TYPES ty_t_mat TYPE STANDARD TABLE OF ty_mat WITH EMPTY KEY.
     DATA lt_mat TYPE ty_t_mat.
 
-    IF lt_union IS NOT INITIAL.
+    IF lr_union IS NOT INITIAL.
       SELECT mara~matnr,
              mara~mtart,
              makt~maktx
@@ -82,14 +85,13 @@ CLASS lcl_app IMPLEMENTATION.
         INNER JOIN makt AS makt
           ON makt~matnr = mara~matnr
          AND makt~spras = @sy-langu
-        WHERE mara~matnr IN @lt_union
+        WHERE mara~matnr IN @lr_union
         INTO TABLE @lt_mat.
     ENDIF.
 
     " Prepare for lookups
     SORT lt_stock BY matnr.
     SORT lt_move_matnr.
-    SORT lt_union.
 
     " Result rows
     TYPES: BEGIN OF ty_row,
@@ -135,8 +137,8 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_row TO lt_main.
     ENDLOOP.
 
-    " BOM section
-    DATA lt_hdr TYPE ty_t_matnr. " FERT with BOM at plant
+    " BOM section: headers (FERT) with BOM in plant
+    DATA lt_hdr TYPE ty_t_matnr.
     SELECT DISTINCT mara~matnr
       FROM mara AS mara
       INNER JOIN mast AS mast
@@ -145,18 +147,27 @@ CLASS lcl_app IMPLEMENTATION.
         AND mast~werks = @p_werks
       INTO TABLE @lt_hdr.
     SORT lt_hdr.
+    DELETE ADJACENT DUPLICATES FROM lt_hdr.
+
+    " Range for headers
+    DATA lr_hdr TYPE RANGE OF mara-matnr.
+    CLEAR lr_hdr.
+    LOOP AT lt_hdr ASSIGNING FIELD-SYMBOL(<lv_hm>).
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = <lv_hm> ) TO lr_hdr.
+    ENDLOOP.
 
     " BOM components for headers in plant
     DATA lt_comp TYPE ty_t_matnr.
-    IF lt_hdr IS NOT INITIAL.
+    IF lr_hdr IS NOT INITIAL.
       SELECT DISTINCT stpo~idnrk
         FROM mast AS mast
         INNER JOIN stpo AS stpo
           ON stpo~stlnr = mast~stlnr
-        WHERE mast~matnr IN @lt_hdr
+        WHERE mast~matnr IN @lr_hdr
           AND mast~werks = @p_werks
         INTO TABLE @lt_comp.
       SORT lt_comp.
+      DELETE ADJACENT DUPLICATES FROM lt_comp.
     ENDIF.
 
     " Components with only BOM (no move, no stock)
@@ -182,8 +193,15 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_bom_all.
     DELETE ADJACENT DUPLICATES FROM lt_bom_all.
 
+    " Range for BOM all
+    DATA lr_bom TYPE RANGE OF mara-matnr.
+    CLEAR lr_bom.
+    LOOP AT lt_bom_all ASSIGNING FIELD-SYMBOL(<lv_bm>).
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = <lv_bm> ) TO lr_bom.
+    ENDLOOP.
+
     DATA lt_bom_mat TYPE ty_t_mat.
-    IF lt_bom_all IS NOT INITIAL.
+    IF lr_bom IS NOT INITIAL.
       SELECT mara~matnr,
              mara~mtart,
              makt~maktx
@@ -191,7 +209,7 @@ CLASS lcl_app IMPLEMENTATION.
         INNER JOIN makt AS makt
           ON makt~matnr = mara~matnr
          AND makt~spras = @sy-langu
-        WHERE mara~matnr IN @lt_bom_all
+        WHERE mara~matnr IN @lr_bom
         INTO TABLE @lt_bom_mat.
     ENDIF.
 
@@ -235,7 +253,7 @@ CLASS lcl_app IMPLEMENTATION.
         t_table      = lt_main ).
     lo_alv->get_display_settings(
       )->set_list_header(
-        value = '자재 리스트 - 메인(입출고 또는 재고 보유) - 플랜트 ' && p_werks ).
+      value = '자재 리스트 - 메인(입출고 또는 재고 보유) - 플랜트 ' && p_werks ).
     lo_alv->display( ).
 
     " Display BOM section
@@ -246,7 +264,7 @@ CLASS lcl_app IMPLEMENTATION.
         t_table      = lt_bom ).
     lo_alv->get_display_settings(
       )->set_list_header(
-        value = '자재 리스트 - BOM 섹션(FERT 및 BOM 전용) - 플랜트 ' && p_werks ).
+      value = '자재 리스트 - BOM 섹션(FERT 및 BOM 전용) - 플랜트 ' && p_werks ).
     lo_alv->display( ).
   ENDMETHOD.
 ENDCLASS.
