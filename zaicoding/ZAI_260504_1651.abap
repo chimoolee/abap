@@ -34,16 +34,16 @@ CLASS lcl_app IMPLEMENTATION.
            END OF ty_result.
     TYPES ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
-    DATA lt_mov_matnr     TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
-    DATA lt_stock_sum     TYPE ty_t_stock_sum.
-    DATA lt_all_main      TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
-    DATA lt_bom_comp      TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
-    DATA lt_info_main     TYPE ty_t_mat_info.
-    DATA lt_info_bom      TYPE ty_t_mat_info.
-    DATA lt_display       TYPE ty_t_result.
-    DATA ls_res           TYPE ty_result.
-    DATA ls_stock         TYPE ty_stock_sum.
-    DATA ls_info          TYPE ty_mat_info.
+    DATA lt_mov_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_stock_sum TYPE ty_t_stock_sum.
+    DATA lt_all_main  TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_bom_comp  TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_info_main TYPE ty_t_mat_info.
+    DATA lt_info_bom  TYPE ty_t_mat_info.
+    DATA lt_display   TYPE ty_t_result.
+    DATA ls_res       TYPE ty_result.
+    DATA ls_stock     TYPE ty_stock_sum.
+    DATA ls_info      TYPE ty_mat_info.
 
     " Movements in period for plant
     SELECT DISTINCT mseg~matnr
@@ -51,8 +51,8 @@ CLASS lcl_app IMPLEMENTATION.
       INNER JOIN mkpf
         ON mkpf~mblnr = mseg~mblnr
        AND mkpf~mjahr = mseg~mjahr
-      WHERE mseg~werks = @p_werks
-        AND mkpf~budat IN @s_budat
+     WHERE mseg~werks = @p_werks
+       AND mkpf~budat IN @s_budat
       INTO TABLE @lt_mov_matnr.
 
     SORT lt_mov_matnr.
@@ -62,9 +62,9 @@ CLASS lcl_app IMPLEMENTATION.
     SELECT mard~matnr,
            SUM( mard~labst ) AS qty
       FROM mard
-      WHERE mard~werks = @p_werks
-      GROUP BY mard~matnr
-      HAVING SUM( mard~labst ) <> 0
+     WHERE mard~werks = @p_werks
+     GROUP BY mard~matnr
+    HAVING SUM( mard~labst ) <> 0
       INTO TABLE @lt_stock_sum.
 
     " Build main material list: union of movement and stock
@@ -86,11 +86,10 @@ CLASS lcl_app IMPLEMENTATION.
         LEFT OUTER JOIN makt AS t
           ON t~matnr = a~matnr
          AND t~spras = @sy-langu
-        WHERE a~matnr IN @lt_all_main
+       WHERE a~matnr IN @lt_all_main
         INTO TABLE @lt_info_main.
     ENDIF.
 
-    " Hash stock for quick lookup
     SORT lt_stock_sum BY matnr.
     SORT lt_info_main BY matnr.
 
@@ -111,7 +110,8 @@ CLASS lcl_app IMPLEMENTATION.
       ELSE.
         CLEAR ls_res-qty.
       ENDIF.
-      READ TABLE lt_mov_matnr WITH KEY table_line = lv_matnr TRANSPORTING NO FIELDS BINARY SEARCH.
+      READ TABLE lt_mov_matnr WITH KEY table_line = lv_matnr
+           TRANSPORTING NO FIELDS BINARY SEARCH.
       IF sy-subrc = 0.
         ls_res-remark = '입출고 실적 있음'.
       ELSE.
@@ -120,21 +120,21 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_res TO lt_display.
     ENDLOOP.
 
-    " BOM-only components: components of FERT headers in plant, excluding main list
+    " BOM-only components from FERT headers in plant, excluding main list
     SELECT DISTINCT stpo~idnrk
       FROM mast
       INNER JOIN mara AS mh
         ON mh~matnr = mast~matnr
       INNER JOIN stpo
         ON stpo~stlnr = mast~stlnr
-      WHERE mast~werks = @p_werks
-        AND mh~mtart  = 'FERT'
+     WHERE mast~werks = @p_werks
+       AND mh~mtart  = 'FERT'
       INTO TABLE @lt_bom_comp.
 
     SORT lt_bom_comp.
     DELETE ADJACENT DUPLICATES FROM lt_bom_comp.
 
-    " Remove materials that already appear in main list
+    " Exclude materials already in main list
     IF lt_bom_comp IS NOT INITIAL AND lt_all_main IS NOT INITIAL.
       DATA lt_bom_only TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
       DATA lv_comp TYPE mara-matnr.
@@ -148,8 +148,7 @@ CLASS lcl_app IMPLEMENTATION.
       lt_bom_comp = lt_bom_only.
     ENDIF.
 
-    " Further exclude those with stock <> 0 or movement in period (already excluded),
-    " but also ensure no stock now and no movement
+    " Further ensure no current stock
     IF lt_bom_comp IS NOT INITIAL.
       DATA lt_bom_final TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
       LOOP AT lt_bom_comp INTO DATA(lv_bmat).
@@ -171,7 +170,7 @@ CLASS lcl_app IMPLEMENTATION.
         LEFT OUTER JOIN makt AS t
           ON t~matnr = a~matnr
          AND t~spras = @sy-langu
-        WHERE a~matnr IN @lt_bom_comp
+       WHERE a~matnr IN @lt_bom_comp
         INTO TABLE @lt_info_bom.
 
       SORT lt_info_bom BY matnr.
