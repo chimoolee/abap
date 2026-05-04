@@ -1,19 +1,25 @@
 REPORT ZAI_260504_1553.
 
 PARAMETERS p_werks TYPE werks_d OBLIGATORY.
-PARAMETERS p_from  TYPE sy-datum DEFAULT sy-datum - 30.
-PARAMETERS p_to    TYPE sy-datum DEFAULT sy-datum.
+PARAMETERS p_from  TYPE sy-datum.
+PARAMETERS p_to    TYPE sy-datum.
+
+INITIALIZATION.
+  p_to   = sy-datum.
+  p_from = sy-datum - 30.
 
 CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
     CLASS-METHODS run.
   PRIVATE SECTION.
     TYPES ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+
     TYPES: BEGIN OF ty_stock_sum,
              matnr TYPE mara-matnr,
              qty   TYPE mard-labst,
            END OF ty_stock_sum.
     TYPES ty_t_stock_sum TYPE STANDARD TABLE OF ty_stock_sum WITH EMPTY KEY.
+
     TYPES: BEGIN OF ty_out,
              matnr   TYPE mara-matnr,
              werks   TYPE werks_d,
@@ -25,34 +31,54 @@ CLASS lcl_app DEFINITION FINAL.
            END OF ty_out.
     TYPES ty_t_out TYPE STANDARD TABLE OF ty_out WITH EMPTY KEY.
 
+    TYPES: BEGIN OF ty_makt,
+             matnr TYPE makt-matnr,
+             spras TYPE makt-spras,
+             maktx TYPE makt-maktx,
+           END OF ty_makt.
+    TYPES ty_t_makt TYPE STANDARD TABLE OF ty_makt WITH EMPTY KEY.
+
     CLASS-METHODS get_mvmt
-      IMPORTING i_werks TYPE werks_d
-                i_from  TYPE sy-datum
-                i_to    TYPE sy-datum
+      IMPORTING
+        i_werks TYPE werks_d
+        i_from  TYPE sy-datum
+        i_to    TYPE sy-datum
       RETURNING VALUE(rt_matnr) TYPE ty_t_matnr.
+
     CLASS-METHODS get_stock_nonzero
-      IMPORTING i_werks TYPE werks_d
+      IMPORTING
+        i_werks TYPE werks_d
       RETURNING VALUE(rt_matnr) TYPE ty_t_matnr.
+
     CLASS-METHODS get_stock_sum
-      IMPORTING i_werks TYPE werks_d
-                it_matnr TYPE ty_t_matnr
+      IMPORTING
+        i_werks TYPE werks_d
+        it_matnr TYPE ty_t_matnr
       RETURNING VALUE(rt_sum) TYPE ty_t_stock_sum.
+
     CLASS-METHODS get_fg_with_bom
-      IMPORTING i_werks TYPE werks_d
+      IMPORTING
+        i_werks TYPE werks_d
       RETURNING VALUE(rt_matnr) TYPE ty_t_matnr.
+
     CLASS-METHODS get_bom_components
-      IMPORTING i_werks TYPE werks_d
+      IMPORTING
+        i_werks TYPE werks_d
       RETURNING VALUE(rt_matnr) TYPE ty_t_matnr.
+
     CLASS-METHODS get_texts
-      IMPORTING it_matnr TYPE ty_t_matnr
-      RETURNING VALUE(rt_texts) TYPE STANDARD TABLE OF makt WITH EMPTY KEY.
+      IMPORTING
+        it_matnr TYPE ty_t_matnr
+      RETURNING VALUE(rt_texts) TYPE ty_t_makt.
+
     CLASS-METHODS build_output
-      IMPORTING i_werks TYPE werks_d
-                it_mvmt TYPE ty_t_matnr
-                it_stock TYPE ty_t_matnr
-                it_bom_fg TYPE ty_t_matnr
-                it_bom_only TYPE ty_t_matnr
-                it_stock_sum TYPE ty_t_stock_sum
+      IMPORTING
+        i_werks      TYPE werks_d
+        it_mvmt      TYPE ty_t_matnr
+        it_stock     TYPE ty_t_matnr
+        it_bom_fg    TYPE ty_t_matnr
+        it_bom_only  TYPE ty_t_matnr
+        it_stock_sum TYPE ty_t_stock_sum
       RETURNING VALUE(rt_out) TYPE ty_t_out.
 ENDCLASS.
 
@@ -77,7 +103,6 @@ CLASS lcl_app IMPLEMENTATION.
     lt_bom_fg   = get_fg_with_bom( i_werks = p_werks ).
     lt_bom_comp = get_bom_components( i_werks = p_werks ).
 
-    " bom_only = components - (mvmt U stock)
     DATA lt_union TYPE ty_t_matnr.
     lt_union = lt_mvmt.
     APPEND LINES OF lt_stock TO lt_union.
@@ -96,7 +121,6 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_bom_only.
     DELETE ADJACENT DUPLICATES FROM lt_bom_only.
 
-    " Stock sums for materials shown in main section
     DATA lt_main TYPE ty_t_matnr.
     lt_main = lt_union.
     IF lt_main IS NOT INITIAL.
@@ -104,12 +128,12 @@ CLASS lcl_app IMPLEMENTATION.
     ENDIF.
 
     lt_out = build_output(
-               i_werks     = p_werks
-               it_mvmt     = lt_mvmt
-               it_stock    = lt_stock
-               it_bom_fg   = lt_bom_fg
-               it_bom_only = lt_bom_only
-               it_stock_sum = lt_sum ).
+      i_werks      = p_werks
+      it_mvmt      = lt_mvmt
+      it_stock     = lt_stock
+      it_bom_fg    = lt_bom_fg
+      it_bom_only  = lt_bom_only
+      it_stock_sum = lt_sum ).
 
     IF lt_out IS INITIAL.
       MESSAGE '데이터가 없습니다.' TYPE 'S'.
@@ -130,7 +154,7 @@ CLASS lcl_app IMPLEMENTATION.
   METHOD get_mvmt.
     DATA lt TYPE ty_t_matnr.
     SELECT DISTINCT
-           mseg~matnr
+      mseg~matnr
       FROM mseg
       INNER JOIN mkpf
         ON mkpf~mblnr = mseg~mblnr
@@ -147,7 +171,7 @@ CLASS lcl_app IMPLEMENTATION.
   METHOD get_stock_nonzero.
     DATA lt TYPE ty_t_matnr.
     SELECT DISTINCT
-           mard~matnr
+      mard~matnr
       FROM mard
       WHERE mard~werks = @i_werks
         AND mard~labst > 0
@@ -178,7 +202,7 @@ CLASS lcl_app IMPLEMENTATION.
   METHOD get_fg_with_bom.
     DATA lt TYPE ty_t_matnr.
     SELECT DISTINCT
-           mast~matnr
+      mast~matnr
       FROM mast
       INNER JOIN mara AS ma
         ON ma~matnr = mast~matnr
@@ -193,13 +217,14 @@ CLASS lcl_app IMPLEMENTATION.
 
   METHOD get_bom_components.
     DATA lt TYPE ty_t_matnr.
-    " Components linked to BOMs valid for the plant
     SELECT DISTINCT
-           stpo~idnrk
+      stpo~idnrk
       FROM mast
+      INNER JOIN stko
+        ON stko~stlnr = mast~stlnr
+       AND stko~stlal = mast~stlal
       INNER JOIN stpo
-        ON stpo~stlnr = mast~stlnr
-       AND stpo~stlal = mast~stlal
+        ON stpo~stlnr = stko~stlnr
       WHERE mast~werks = @i_werks
       INTO TABLE @lt
       UP TO 100000 ROWS.
@@ -209,14 +234,15 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD get_texts.
-    DATA lt TYPE STANDARD TABLE OF makt WITH EMPTY KEY.
+    DATA lt TYPE ty_t_makt.
     IF it_matnr IS INITIAL.
       rt_texts = lt.
       RETURN.
     ENDIF.
-    SELECT makt~matnr,
-           makt~spras,
-           makt~maktx
+    SELECT
+      makt~matnr,
+      makt~spras,
+      makt~maktx
       FROM makt
       WHERE makt~matnr IN @it_matnr
         AND makt~spras = @sy-langu
@@ -226,9 +252,9 @@ CLASS lcl_app IMPLEMENTATION.
 
   METHOD build_output.
     DATA lt_all TYPE ty_t_matnr.
-    DATA lt_texts TYPE STANDARD TABLE OF makt WITH EMPTY KEY.
+    DATA lt_texts TYPE ty_t_makt.
+    DATA lt_out TYPE ty_t_out.
 
-    " Main set: mvmt or stock
     lt_all = it_mvmt.
     APPEND LINES OF it_stock TO lt_all.
     APPEND LINES OF it_bom_only TO lt_all.
@@ -239,12 +265,6 @@ CLASS lcl_app IMPLEMENTATION.
       lt_texts = get_texts( lt_all ).
     ENDIF.
 
-    DATA lt_out TYPE ty_t_out.
-
-    " Helper to read text
-    DATA(l_get_text) = VALUE string( ).
-
-    " Build rows for main materials (mvmt or stock)
     DATA lt_main TYPE ty_t_matnr.
     lt_main = it_mvmt.
     APPEND LINES OF it_stock TO lt_main.
@@ -291,7 +311,6 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls TO lt_out.
     ENDLOOP.
 
-    " Build rows for BOM-only components
     LOOP AT it_bom_only ASSIGNING FIELD-SYMBOL(<c>).
       DATA(lc) = VALUE ty_out( ).
       lc-matnr   = <c>.
