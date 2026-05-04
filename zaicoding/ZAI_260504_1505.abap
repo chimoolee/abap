@@ -1,7 +1,7 @@
 REPORT ZAI_260504_1505.
 
 PARAMETERS p_werks TYPE werks_d OBLIGATORY.
-SELECT-OPTIONS s_budat FOR mkpf-budat NO-EXTENSION.
+SELECT-OPTIONS s_budat TYPE budat NO-EXTENSION.
 
 CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
@@ -28,13 +28,13 @@ CLASS lcl_app IMPLEMENTATION.
            END OF ty_mat.
 
     TYPES: BEGIN OF ty_result,
-             matnr TYPE mara-matnr,
-             werks TYPE werks_d,
-             maktx TYPE makt-maktx,
-             mtart TYPE mara-mtart,
-             matkl TYPE mara-matkl,
-             meins TYPE mara-meins,
-             stock TYPE mard-labst,
+             matnr  TYPE mara-matnr,
+             werks  TYPE werks_d,
+             maktx  TYPE makt-maktx,
+             mtart  TYPE mara-mtart,
+             matkl  TYPE mara-matkl,
+             meins  TYPE mara-meins,
+             stock  TYPE mard-labst,
              status TYPE char20,
            END OF ty_result.
 
@@ -79,24 +79,25 @@ CLASS lcl_app IMPLEMENTATION.
         FROM mara AS mara
         INNER JOIN makt AS makt
           ON makt~matnr = mara~matnr
-       WHERE mara~matnr IN @lt_all_matnr
-         AND makt~spras = @sy-langu
+        WHERE mara~matnr IN @lt_all_matnr
+          AND makt~spras = @sy-langu
         INTO TABLE @lt_mat.
     ENDIF.
 
     " Helper for quick lookups
     DATA lt_stock_by_mat TYPE HASHED TABLE OF ty_stock
-         WITH UNIQUE KEY matnr werks.
+                          WITH UNIQUE KEY matnr werks.
     lt_stock_by_mat = lt_stock.
 
-    DATA lt_mov_set TYPE HASHED TABLE OF mara-matnr WITH UNIQUE KEY table_line.
+    DATA lt_mov_set TYPE HASHED TABLE OF mara-matnr
+                     WITH UNIQUE KEY table_line.
     lt_mov_set = lt_mov_matnr.
 
     " 5) Build main result
     LOOP AT lt_mat ASSIGNING FIELD-SYMBOL(<ls_mat>).
       DATA(lv_stock_qty) = CONV mard-labst( 0 ).
       READ TABLE lt_stock_by_mat ASSIGNING FIELD-SYMBOL(<ls_s>)
-           WITH TABLE KEY matnr = <ls_mat>-matnr werks = p_werks.
+        WITH TABLE KEY matnr = <ls_mat>-matnr werks = p_werks.
       IF sy-subrc = 0.
         lv_stock_qty = <ls_s>-qty.
       ENDIF.
@@ -111,33 +112,32 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
 
       APPEND VALUE ty_result(
-        matnr  = <ls_mat>-matnr
-        werks  = p_werks
-        maktx  = <ls_mat>-maktx
-        mtart  = <ls_mat>-mtart
-        matkl  = <ls_mat>-matkl
-        meins  = <ls_mat>-meins
-        stock  = lv_stock_qty
-        status = lv_status ) TO lt_main.
+               matnr  = <ls_mat>-matnr
+               werks  = p_werks
+               maktx  = <ls_mat>-maktx
+               mtart  = <ls_mat>-mtart
+               matkl  = <ls_mat>-matkl
+               meins  = <ls_mat>-meins
+               stock  = lv_stock_qty
+               status = lv_status ) TO lt_main.
     ENDLOOP.
 
-    " 6) BOM-only components: components registered in BOMs in plant,
-    "    with no movement and zero stock
+    " 6) BOM-only components for FERT with BOM in plant
     DATA lt_fert_with_bom TYPE ty_t_matnr.
     SELECT DISTINCT mast~matnr
       FROM mast AS mast
       INNER JOIN mara AS mara
         ON mara~matnr = mast~matnr
-     WHERE mast~werks = @p_werks
-       AND mara~mtart = 'FERT'
+      WHERE mast~werks = @p_werks
+        AND mara~mtart = 'FERT'
       INTO TABLE @lt_fert_with_bom.
 
     DATA lt_stlnr TYPE STANDARD TABLE OF stko-stlnr WITH EMPTY KEY.
     IF lt_fert_with_bom IS NOT INITIAL.
       SELECT DISTINCT mast~stlnr
         FROM mast AS mast
-       WHERE mast~werks = @p_werks
-         AND mast~matnr IN @lt_fert_with_bom
+        WHERE mast~werks = @p_werks
+          AND mast~matnr IN @lt_fert_with_bom
         INTO TABLE @lt_stlnr.
     ENDIF.
 
@@ -145,13 +145,14 @@ CLASS lcl_app IMPLEMENTATION.
     IF lt_stlnr IS NOT INITIAL.
       SELECT DISTINCT stpo~idnrk
         FROM stpo AS stpo
-       WHERE stpo~stlnr IN @lt_stlnr
+        WHERE stpo~stlnr IN @lt_stlnr
         INTO TABLE @lt_bom_comp.
     ENDIF.
 
     " Exclude materials already in main list (movement or stock)
     IF lt_bom_comp IS NOT INITIAL.
-      DATA lt_main_set TYPE HASHED TABLE OF mara-matnr WITH UNIQUE KEY table_line.
+      DATA lt_main_set TYPE HASHED TABLE OF mara-matnr
+                        WITH UNIQUE KEY table_line.
       LOOP AT lt_main ASSIGNING FIELD-SYMBOL(<ls_main_mat>).
         INSERT <ls_main_mat>-matnr INTO TABLE lt_main_set.
       ENDLOOP.
@@ -176,25 +177,25 @@ CLASS lcl_app IMPLEMENTATION.
           FROM mara AS mara
           INNER JOIN makt AS makt
             ON makt~matnr = mara~matnr
-         WHERE mara~matnr IN @lt_bom_only_mat
-           AND makt~spras = @sy-langu
+          WHERE mara~matnr IN @lt_bom_only_mat
+            AND makt~spras = @sy-langu
           INTO TABLE @lt_bom_mat.
 
         LOOP AT lt_bom_mat ASSIGNING FIELD-SYMBOL(<ls_bm>).
           APPEND VALUE ty_result(
-            matnr  = <ls_bm>-matnr
-            werks  = p_werks
-            maktx  = <ls_bm>-maktx
-            mtart  = <ls_bm>-mtart
-            matkl  = <ls_bm>-matkl
-            meins  = <ls_bm>-meins
-            stock  = 0
-            status = 'BOM 만 있음' ) TO lt_bom_only.
+                   matnr  = <ls_bm>-matnr
+                   werks  = p_werks
+                   maktx  = <ls_bm>-maktx
+                   mtart  = <ls_bm>-mtart
+                   matkl  = <ls_bm>-matkl
+                   meins  = <ls_bm>-meins
+                   stock  = 0
+                   status = 'BOM 만 있음' ) TO lt_bom_only.
         ENDLOOP.
       ENDIF.
     ENDIF.
 
-    " 7) Display main list
+    " 7) Display
     IF lt_main IS INITIAL AND lt_bom_only IS INITIAL.
       WRITE: / '선택한 조건에 해당하는 데이터가 없습니다.'.
       RETURN.
@@ -209,7 +210,6 @@ CLASS lcl_app IMPLEMENTATION.
     lo_alv->get_functions( )->set_all( abap_true ).
     lo_alv->display( ).
 
-    " 8) Display BOM-only section if exists
     IF lt_bom_only IS NOT INITIAL.
       SKIP.
       WRITE: / 'BOM 요소만 등록된 자재'.
