@@ -19,12 +19,14 @@ CLASS lcl_app IMPLEMENTATION.
 
     TYPES: ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
-    " Movement materials in period and plant (MATDOC)
+    " Movement materials in period and plant (MATDOC + MKPF for date)
     DATA lt_mov_mats TYPE ty_t_matnr.
-    SELECT DISTINCT matdoc~matnr
-      FROM matdoc AS matdoc
-      WHERE matdoc~werks = @p_werks
-        AND matdoc~budat_mkpf BETWEEN @p_begda AND @p_endda
+    SELECT DISTINCT m~matnr
+      FROM matdoc AS m
+      INNER JOIN mkpf AS k
+        ON k~mblnr = m~mblnr AND k~mjahr = m~mjahr
+      WHERE m~werks = @p_werks
+        AND k~budat BETWEEN @p_begda AND @p_endda
       INTO TABLE @lt_mov_mats.
 
     " Current stock per material in plant (sum of MARD-LABST)
@@ -103,7 +105,7 @@ CLASS lcl_app IMPLEMENTATION.
              werks   TYPE werks_d,
              labst   TYPE mard-labst,
              has_mov TYPE abap_bool,
-             status  TYPE char20,
+             status  TYPE c LENGTH 20,
            END OF ty_out.
     TYPES ty_t_out TYPE STANDARD TABLE OF ty_out WITH EMPTY KEY.
     DATA lt_out TYPE ty_t_out.
@@ -133,7 +135,8 @@ CLASS lcl_app IMPLEMENTATION.
         ls_out-maktx = <tx>-maktx.
       ENDIF.
 
-      READ TABLE lt_mov_mats WITH KEY table_line = <mat> TRANSPORTING NO FIELDS.
+      READ TABLE lt_mov_mats WITH KEY table_line = <mat>
+           TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         ls_out-has_mov = abap_true.
       ELSE.
@@ -199,7 +202,8 @@ CLASS lcl_app IMPLEMENTATION.
         ls2-labst = <s>-labst.
       ENDIF.
 
-      READ TABLE lt_mov_mats WITH KEY table_line = <mat> TRANSPORTING NO FIELDS.
+      READ TABLE lt_mov_mats WITH KEY table_line = <mat>
+           TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         ls2-has_mov = abap_true.
       ELSE.
@@ -219,7 +223,7 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls2 TO lt_out2.
     ENDLOOP.
 
-    " Components that are only in BOM and have no stock/movements
+    " Components only in BOM and not in movement/stock
     DATA lt_comp_mats TYPE ty_t_matnr.
     IF lt_hdr_mats IS NOT INITIAL.
       SELECT DISTINCT stpo~idnrk
@@ -234,7 +238,8 @@ CLASS lcl_app IMPLEMENTATION.
     DELETE ADJACENT DUPLICATES FROM lt_comp_mats COMPARING table_line.
 
     LOOP AT lt_comp_mats ASSIGNING <mat>.
-      READ TABLE lt_have_any WITH KEY table_line = <mat> TRANSPORTING NO FIELDS.
+      READ TABLE lt_have_any WITH KEY table_line = <mat>
+           TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         CONTINUE.
       ENDIF.
