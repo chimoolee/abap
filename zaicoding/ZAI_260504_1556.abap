@@ -12,11 +12,13 @@ ENDCLASS.
 CLASS lcl_app IMPLEMENTATION.
   METHOD run.
     TYPES ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+
     TYPES: BEGIN OF ty_stock,
              matnr TYPE mara-matnr,
              labst TYPE mard-labst,
            END OF ty_stock.
     TYPES ty_t_stock TYPE STANDARD TABLE OF ty_stock WITH EMPTY KEY.
+
     TYPES: BEGIN OF ty_row,
              matnr    TYPE mara-matnr,
              mtart    TYPE mara-mtart,
@@ -27,6 +29,20 @@ CLASS lcl_app IMPLEMENTATION.
              category TYPE char20,
            END OF ty_row.
     TYPES ty_t_out TYPE STANDARD TABLE OF ty_row WITH EMPTY KEY.
+
+    TYPES: BEGIN OF ty_mara_sel,
+             matnr TYPE mara-matnr,
+             mtart TYPE mara-mtart,
+             matkl TYPE mara-matkl,
+             meins TYPE mara-meins,
+           END OF ty_mara_sel.
+    TYPES ty_t_mara_sel TYPE STANDARD TABLE OF ty_mara_sel WITH EMPTY KEY.
+
+    TYPES: BEGIN OF ty_makt_sel,
+             matnr TYPE makt-matnr,
+             maktx TYPE makt-maktx,
+           END OF ty_makt_sel.
+    TYPES ty_t_makt_sel TYPE STANDARD TABLE OF ty_makt_sel WITH EMPTY KEY.
 
     DATA lt_mov        TYPE ty_t_matnr.
     DATA lt_stock_agg  TYPE ty_t_stock.
@@ -79,20 +95,20 @@ CLASS lcl_app IMPLEMENTATION.
     " Union of movement and stock materials
     lt_all_mats = lt_mov.
     LOOP AT lt_stock_mats INTO DATA(lv_matnr1).
-      IF line_exists( lt_all_mats[ table_line = lv_matnr1 ] ) = abap_false.
+      IF NOT line_exists( lt_all_mats[ table_line = lv_matnr1 ] ).
         APPEND lv_matnr1 TO lt_all_mats.
       ENDIF.
     ENDLOOP.
 
     " Add BOM-only components
     LOOP AT lt_bom_comp INTO DATA(lv_bcomp).
-      IF line_exists( lt_all_mats[ table_line = lv_bcomp ] ) = abap_false.
+      IF NOT line_exists( lt_all_mats[ table_line = lv_bcomp ] ).
         APPEND lv_bcomp TO lt_all_mats.
       ENDIF.
     ENDLOOP.
 
     " Fetch basic data and texts
-    DATA lt_mara TYPE STANDARD TABLE OF mara WITH EMPTY KEY.
+    DATA lt_mara_sel TYPE ty_t_mara_sel.
     IF lt_all_mats IS NOT INITIAL.
       SELECT mara~matnr,
              mara~mtart,
@@ -101,11 +117,11 @@ CLASS lcl_app IMPLEMENTATION.
         FROM mara AS mara
        FOR ALL ENTRIES IN @lt_all_mats
        WHERE mara~matnr = @lt_all_mats-table_line
-        INTO TABLE @lt_mara.
-      SORT lt_mara BY matnr.
+        INTO TABLE @lt_mara_sel.
+      SORT lt_mara_sel BY matnr.
     ENDIF.
 
-    DATA lt_makt TYPE STANDARD TABLE OF makt WITH EMPTY KEY.
+    DATA lt_makt_sel TYPE ty_t_makt_sel.
     IF lt_all_mats IS NOT INITIAL.
       SELECT makt~matnr,
              makt~maktx
@@ -113,8 +129,8 @@ CLASS lcl_app IMPLEMENTATION.
        FOR ALL ENTRIES IN @lt_all_mats
        WHERE makt~matnr = @lt_all_mats-table_line
          AND makt~spras = @sy-langu
-        INTO TABLE @lt_makt.
-      SORT lt_makt BY matnr.
+        INTO TABLE @lt_makt_sel.
+      SORT lt_makt_sel BY matnr.
     ENDIF.
 
     " Build output
@@ -122,14 +138,14 @@ CLASS lcl_app IMPLEMENTATION.
       CLEAR ls_out.
       ls_out-matnr = lv_matnr2.
 
-      READ TABLE lt_mara WITH KEY matnr = lv_matnr2 INTO DATA(ls_mara) BINARY SEARCH.
+      READ TABLE lt_mara_sel WITH KEY matnr = lv_matnr2 INTO DATA(ls_mara) BINARY SEARCH.
       IF sy-subrc = 0.
         ls_out-mtart = ls_mara-mtart.
         ls_out-matkl = ls_mara-matkl.
         ls_out-meins = ls_mara-meins.
       ENDIF.
 
-      READ TABLE lt_makt WITH KEY matnr = lv_matnr2 INTO DATA(ls_makt) BINARY SEARCH.
+      READ TABLE lt_makt_sel WITH KEY matnr = lv_matnr2 INTO DATA(ls_makt) BINARY SEARCH.
       IF sy-subrc = 0.
         ls_out-maktx = ls_makt-maktx.
       ENDIF.
@@ -166,7 +182,8 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_out BY category matnr.
 
     IF lt_out IS INITIAL.
-      WRITE: / '조회 결과가 없습니다.'.
+      DATA(lv_msg) = |조회 결과가 없습니다.|.
+      WRITE: / lv_msg.
       RETURN.
     ENDIF.
 
