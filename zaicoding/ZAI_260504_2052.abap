@@ -3,7 +3,7 @@ REPORT ZAI_260504_2052.
 TABLES mara.
 
 SELECT-OPTIONS s_budat FOR sy-datum.
-SELECT-OPTIONS s_werks FOR werks_d.
+SELECT-OPTIONS s_werks FOR mseg-werks.
 
 CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
@@ -76,14 +76,14 @@ CLASS lcl_app IMPLEMENTATION.
       DATA(lv_in_stk) = abap_false.
 
       READ TABLE lt_mov_matnr WITH KEY table_line = <ls_res>-matnr
-           TRANSPORTING NO FIELDS BINARY SEARCH.
+        TRANSPORTING NO FIELDS BINARY SEARCH.
       IF sy-subrc = 0.
         lv_in_mov = abap_true.
       ENDIF.
 
       IF lv_in_mov = abap_false.
         READ TABLE lt_stock_matnr WITH KEY table_line = <ls_res>-matnr
-             TRANSPORTING NO FIELDS BINARY SEARCH.
+          TRANSPORTING NO FIELDS BINARY SEARCH.
         IF sy-subrc = 0.
           lv_in_stk = abap_true.
         ENDIF.
