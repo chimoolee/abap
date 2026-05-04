@@ -100,9 +100,7 @@ CLASS lcl_app IMPLEMENTATION.
       END OF ty_move_flag.
     DATA lt_move_flag TYPE STANDARD TABLE OF ty_move_flag WITH EMPTY KEY.
     LOOP AT lt_move_keys ASSIGNING FIELD-SYMBOL(<ls_mk>).
-      APPEND VALUE ty_move_flag(
-        matnr = <ls_mk>-matnr
-        werks = <ls_mk>-werks ) TO lt_move_flag.
+      APPEND VALUE ty_move_flag( matnr = <ls_mk>-matnr werks = <ls_mk>-werks ) TO lt_move_flag.
     ENDLOOP.
     SORT lt_move_flag BY matnr werks.
     DELETE ADJACENT DUPLICATES FROM lt_move_flag COMPARING matnr werks.
@@ -119,7 +117,7 @@ CLASS lcl_app IMPLEMENTATION.
       ls_res-werks = <ls_k>-werks.
 
       READ TABLE lt_mat_sorted ASSIGNING FIELD-SYMBOL(<ls_mat>)
-        WITH KEY matnr = <ls_k>-matnr BINARY SEARCH.
+           WITH KEY matnr = <ls_k>-matnr BINARY SEARCH.
       IF sy-subrc = 0.
         ls_res-mtart = <ls_mat>-mtart.
         ls_res-matkl = <ls_mat>-matkl.
@@ -127,7 +125,7 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
 
       READ TABLE lt_stock ASSIGNING <ls_s>
-        WITH KEY matnr = <ls_k>-matnr werks = <ls_k>-werks BINARY SEARCH.
+           WITH KEY matnr = <ls_k>-matnr werks = <ls_k>-werks BINARY SEARCH.
       IF sy-subrc = 0.
         ls_res-qty = <ls_s>-qty.
       ELSE.
@@ -135,7 +133,7 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
 
       READ TABLE lt_move_flag TRANSPORTING NO FIELDS
-        WITH KEY matnr = <ls_k>-matnr werks = <ls_k>-werks BINARY SEARCH.
+           WITH KEY matnr = <ls_k>-matnr werks = <ls_k>-werks BINARY SEARCH.
       IF sy-subrc = 0.
         ls_res-status = |입출고 있음|.
       ELSEIF ls_res-qty IS NOT INITIAL AND ls_res-qty <> 0.
@@ -152,17 +150,19 @@ CLASS lcl_app IMPLEMENTATION.
       IMPORTING
         r_salv_table = lo_alv
       CHANGING
-        t_table      = lt_result ).
+        t_table      = lt_result
+    ).
     lo_alv->get_functions( )->set_all( abap_true ).
     lo_alv->get_display_settings( )->set_list_header(
-      '자재 실적/재고 현황 - 플랜트 및 전기일 기준' ).
+      '자재 실적/재고 현황 - 플랜트 및 전기일 기준'
+    ).
     lo_alv->display( ).
   ENDMETHOD.
 
   METHOD get_move_keys.
     DATA lt_keys TYPE ty_t_key.
 
-    IF ir_werks IS INITIAL.
+    IF ir_werks IS INITIAL AND ir_budat IS INITIAL.
       SELECT DISTINCT
              mseg~matnr,
              mseg~werks
@@ -170,4 +170,79 @@ CLASS lcl_app IMPLEMENTATION.
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
          AND mkpf~mjahr = mseg~mjahr
-        INTO
+        INTO TABLE @lt_keys.
+    ELSEIF ir_werks IS INITIAL.
+      SELECT DISTINCT
+             mseg~matnr,
+             mseg~werks
+        FROM mseg
+        INNER JOIN mkpf
+          ON mkpf~mblnr = mseg~mblnr
+         AND mkpf~mjahr = mseg~mjahr
+        INTO TABLE @lt_keys
+        WHERE mkpf~budat IN @ir_budat.
+    ELSEIF ir_budat IS INITIAL.
+      SELECT DISTINCT
+             mseg~matnr,
+             mseg~werks
+        FROM mseg
+        INNER JOIN mkpf
+          ON mkpf~mblnr = mseg~mblnr
+         AND mkpf~mjahr = mseg~mjahr
+        INTO TABLE @lt_keys
+        WHERE mseg~werks IN @ir_werks.
+    ELSE.
+      SELECT DISTINCT
+             mseg~matnr,
+             mseg~werks
+        FROM mseg
+        INNER JOIN mkpf
+          ON mkpf~mblnr = mseg~mblnr
+         AND mkpf~mjahr = mseg~mjahr
+        INTO TABLE @lt_keys
+        WHERE mseg~werks IN @ir_werks
+          AND mkpf~budat IN @ir_budat.
+    ENDIF.
+
+    rt_keys = lt_keys.
+  ENDMETHOD.
+
+  METHOD get_stock.
+    DATA lt_stock TYPE ty_t_stock.
+
+    IF ir_werks IS INITIAL.
+      SELECT
+        mard~matnr,
+        mard~werks,
+        SUM( mard~labst ) AS qty
+        FROM mard
+        GROUP BY mard~matnr, mard~werks
+        HAVING SUM( mard~labst ) <> 0
+        INTO TABLE @lt_stock.
+    ELSE.
+      SELECT
+        mard~matnr,
+        mard~werks,
+        SUM( mard~labst ) AS qty
+        FROM mard
+        WHERE mard~werks IN @ir_werks
+        GROUP BY mard~matnr, mard~werks
+        HAVING SUM( mard~labst ) <> 0
+        INTO TABLE @lt_stock.
+    ENDIF.
+
+    SORT lt_stock BY matnr werks.
+    rt_stock = lt_stock.
+  ENDMETHOD.
+
+  METHOD get_materials.
+    DATA lt_mat TYPE ty_t_mat.
+
+    IF it_matnr IS INITIAL.
+      rt_mat = lt_mat.
+      RETURN.
+    ENDIF.
+
+    SELECT
+      mara~matnr,
+      mara~mtart
