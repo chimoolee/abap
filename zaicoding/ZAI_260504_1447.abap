@@ -76,12 +76,14 @@ CLASS lcl_app IMPLEMENTATION.
       DATA(lv_has_mov) = abap_false.
       DATA(lv_has_stk) = abap_false.
 
-      READ TABLE lt_mov_s WITH TABLE KEY table_line = <ls_attr>-matnr TRANSPORTING NO FIELDS.
+      READ TABLE lt_mov_s WITH TABLE KEY table_line = <ls_attr>-matnr
+           TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_has_mov = abap_true.
       ENDIF.
 
-      READ TABLE lt_stock_s WITH TABLE KEY table_line = <ls_attr>-matnr TRANSPORTING NO FIELDS.
+      READ TABLE lt_stock_s WITH TABLE KEY table_line = <ls_attr>-matnr
+           TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_has_stk = abap_true.
       ENDIF.
@@ -152,7 +154,9 @@ CLASS lcl_app IMPLEMENTATION.
     TYPES ty_t_map TYPE SORTED TABLE OF ty_map WITH UNIQUE KEY stlnr.
     DATA lt_map TYPE ty_t_map.
     LOOP AT lt_fert ASSIGNING <ls_fert>.
-      INSERT VALUE ty_map( stlnr = <ls_fert>-stlnr matnr = <ls_fert>-matnr ) INTO TABLE lt_map.
+      INSERT VALUE ty_map(
+        stlnr = <ls_fert>-stlnr
+        matnr = <ls_fert>-matnr ) INTO TABLE lt_map.
     ENDLOOP.
 
     DATA lt_comp_mat TYPE ty_t_matnr.
@@ -227,17 +231,20 @@ CLASS lcl_app IMPLEMENTATION.
     FIELD-SYMBOLS <ls_txt> TYPE ty_txt.
 
     LOOP AT lt_comp ASSIGNING <ls_comp>.
-      READ TABLE lt_cmov_s WITH TABLE KEY table_line = <ls_comp>-matnr TRANSPORTING NO FIELDS.
+      READ TABLE lt_cmov_s WITH TABLE KEY table_line = <ls_comp>-matnr
+           TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         CONTINUE.
       ENDIF.
-      READ TABLE lt_cstk_s WITH TABLE KEY table_line = <ls_comp>-matnr TRANSPORTING NO FIELDS.
+      READ TABLE lt_cstk_s WITH TABLE KEY table_line = <ls_comp>-matnr
+           TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         CONTINUE.
       ENDIF.
 
       DATA(lv_parent) = VALUE mara-matnr( ).
-      READ TABLE lt_map WITH KEY stlnr = <ls_comp>-stlnr ASSIGNING FIELD-SYMBOL(<ls_map>).
+      READ TABLE lt_map WITH KEY stlnr = <ls_comp>-stlnr
+           ASSIGNING FIELD-SYMBOL(<ls_map>).
       IF sy-subrc = 0.
         lv_parent = <ls_map>-matnr.
       ENDIF.
@@ -303,9 +310,11 @@ CLASS lcl_app IMPLEMENTATION.
         r_salv_table = lo_alv
       CHANGING
         t_table      = lt_out ).
+
     lo_alv->get_functions( )->set_all( abap_true ).
     lo_alv->get_display_settings( )->set_list_header(
       |플랜트 { p_werks } 기간 { p_begda } ~ { p_endda } 자재/재고/입출고/BOM 요약| ).
+
     lo_alv->get_columns( )->get_column( 'CATEGORY' )->set_short_text( '섹션' ).
     lo_alv->get_columns( )->get_column( 'MATNR' )->set_short_text( '자재' ).
     lo_alv->get_columns( )->get_column( 'MAKTX' )->set_short_text( '자재명' ).
@@ -315,6 +324,7 @@ CLASS lcl_app IMPLEMENTATION.
     lo_alv->get_columns( )->get_column( 'HAS_MOV' )->set_short_text( '입출고' ).
     lo_alv->get_columns( )->get_column( 'HAS_STK' )->set_short_text( '재고' ).
     lo_alv->get_columns( )->get_column( 'STATUS' )->set_short_text( '상태' ).
+
     lo_alv->display( ).
   ENDMETHOD.
 ENDCLASS.
