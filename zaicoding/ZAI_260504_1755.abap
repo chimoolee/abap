@@ -1,5 +1,7 @@
 REPORT ZAI_260504_1755.
 
+TABLES mara.
+
 SELECT-OPTIONS s_budat FOR mkpf-budat NO-EXTENSION.
 SELECT-OPTIONS s_werks FOR mseg-werks NO-EXTENSION.
 
@@ -20,8 +22,8 @@ CLASS lcl_app IMPLEMENTATION.
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
-    DATA lt_result       TYPE ty_t_result.
-    DATA lt_result_bom   TYPE ty_t_result.
+    DATA lt_result      TYPE ty_t_result.
+    DATA lt_result_bom  TYPE ty_t_result.
 
     DATA lt_mov_matnr    TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
     DATA lt_stock_matnr  TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
@@ -32,7 +34,7 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_details      TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
     DATA lt_details_bom  TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
-    " 1) Materials with movements (MKPF/MSEG) in selected date and plant
+    " Materials with movements (MKPF/MSEG) in selected date and plant
     SELECT DISTINCT
       mseg~matnr
       FROM mseg
@@ -44,7 +46,7 @@ CLASS lcl_app IMPLEMENTATION.
         AND mseg~werks IN @s_werks
         AND mseg~matnr <> ''.
 
-    " 2) Materials with current stock (MARD) not zero for selected plant
+    " Materials with current stock (MARD) not zero for selected plant
     SELECT
       mard~matnr
       FROM mard
@@ -53,13 +55,13 @@ CLASS lcl_app IMPLEMENTATION.
         AND mard~matnr <> ''
         AND mard~labst <> 0.
 
-    " Union: all materials to display on first page (movements or non-zero stock)
+    " Union for first page
     APPEND LINES OF lt_mov_matnr   TO lt_all_matnr.
     APPEND LINES OF lt_stock_matnr TO lt_all_matnr.
     SORT lt_all_matnr.
     DELETE ADJACENT DUPLICATES FROM lt_all_matnr.
 
-    " Read master/texts for first page materials
+    " Master/texts for first page materials
     IF lt_all_matnr IS NOT INITIAL.
       SELECT
         mara~matnr,
@@ -74,7 +76,6 @@ CLASS lcl_app IMPLEMENTATION.
         WHERE mara~matnr IN @lt_all_matnr.
     ENDIF.
 
-    " Prepare lookup by sorting lists
     SORT lt_mov_matnr.
     SORT lt_stock_matnr.
 
@@ -85,13 +86,13 @@ CLASS lcl_app IMPLEMENTATION.
       DATA(lv_has_stk) = abap_false.
 
       READ TABLE lt_mov_matnr WITH KEY table_line = ls_det-matnr
-        TRANSPORTING NO FIELDS BINARY SEARCH.
+           TRANSPORTING NO FIELDS BINARY SEARCH.
       IF sy-subrc = 0.
         lv_has_mov = abap_true.
       ENDIF.
 
       READ TABLE lt_stock_matnr WITH KEY table_line = ls_det-matnr
-        TRANSPORTING NO FIELDS BINARY SEARCH.
+           TRANSPORTING NO FIELDS BINARY SEARCH.
       IF sy-subrc = 0.
         lv_has_stk = abap_true.
       ENDIF.
@@ -107,28 +108,28 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_det TO lt_result.
     ENDLOOP.
 
-    " 3) BOM-only materials (FERT/HALB) for selected plants not in first page
+    " BOM-only candidates: FERT/HALB assigned BOMs in plant with at least one item
     SELECT DISTINCT
       mara~matnr
-      FROM stko
-      INNER JOIN stpo
-        ON stpo~stlnr = stko~stlnr
+      FROM mast
       INNER JOIN mara
-        ON mara~matnr = stko~matnr
+        ON mara~matnr = mast~matnr
+      INNER JOIN stpo
+        ON stpo~stlnr = mast~stlnr
       INTO TABLE @lt_bom_matnr
-      WHERE stko~werks IN @s_werks
+      WHERE mast~werks IN @s_werks
         AND mara~mtart IN ('FERT','HALB')
         AND mara~matnr <> ''.
 
     SORT lt_bom_matnr.
     DELETE ADJACENT DUPLICATES FROM lt_bom_matnr.
 
-    " Exclude materials already in first page list
+    " Exclude first page materials
     SORT lt_all_matnr.
     DATA lv_mat TYPE mara-matnr.
     LOOP AT lt_bom_matnr INTO lv_mat.
       READ TABLE lt_all_matnr WITH KEY table_line = lv_mat
-        TRANSPORTING NO FIELDS BINARY SEARCH.
+           TRANSPORTING NO FIELDS BINARY SEARCH.
       IF sy-subrc <> 0.
         APPEND lv_mat TO lt_bom_only.
       ENDIF.
@@ -154,7 +155,7 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_det TO lt_result_bom.
     ENDLOOP.
 
-    " Display ALV: first page (movements/stock)
+    " Display ALV: first page
     DATA lo_alv TYPE REF TO cl_salv_table.
     cl_salv_table=>factory(
       IMPORTING
@@ -163,7 +164,7 @@ CLASS lcl_app IMPLEMENTATION.
         t_table      = lt_result ).
     lo_alv->display( ).
 
-    " Display ALV: second page (BOM-only)
+    " Display ALV: second page
     IF lt_result_bom IS NOT INITIAL.
       NEW-PAGE.
       CLEAR lo_alv.
