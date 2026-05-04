@@ -160,8 +160,8 @@ CLASS lcl_app IMPLEMENTATION.
       INNER JOIN mkpf
         ON mkpf~mblnr = mseg~mblnr
        AND mkpf~mjahr = mseg~mjahr
-     WHERE mseg~werks = @i_werks
-       AND mkpf~budat BETWEEN @i_begda AND @i_endda
+      WHERE mseg~werks = @i_werks
+        AND mkpf~budat BETWEEN @i_begda AND @i_endda
       INTO TABLE @lt_mat.
     rt_matnr = lt_mat.
   ENDMETHOD.
@@ -171,9 +171,9 @@ CLASS lcl_app IMPLEMENTATION.
     SELECT mard~matnr,
            SUM( mard~labst ) AS stock
       FROM mard
-     WHERE mard~werks = @i_werks
-     GROUP BY mard~matnr
-    HAVING SUM( mard~labst ) <> 0
+      WHERE mard~werks = @i_werks
+      GROUP BY mard~matnr
+      HAVING SUM( mard~labst ) <> 0
       INTO TABLE @lt_stock.
     rt_stock = lt_stock.
   ENDMETHOD.
@@ -192,7 +192,7 @@ CLASS lcl_app IMPLEMENTATION.
       LEFT OUTER JOIN makt
         ON makt~matnr = mara~matnr
        AND makt~spras = @sy-langu
-     WHERE mara~matnr IN @it_matnr
+      WHERE mara~matnr IN @it_matnr
       INTO TABLE @lt_mm.
     rt_mm = lt_mm.
   ENDMETHOD.
@@ -227,7 +227,7 @@ CLASS lcl_app IMPLEMENTATION.
       DATA lv_in_mov TYPE abap_bool.
       lv_in_mov = abap_false.
       READ TABLE lt_mov_s WITH KEY table_line = ls_mm-matnr
-           TRANSPORTING NO FIELDS BINARY SEARCH.
+        TRANSPORTING NO FIELDS BINARY SEARCH.
       IF sy-subrc = 0.
         lv_in_mov = abap_true.
       ENDIF.
@@ -257,9 +257,10 @@ CLASS lcl_app IMPLEMENTATION.
        AND stpo~stlal = mast~stlal
       INNER JOIN mara
         ON mara~matnr = mast~matnr
-     WHERE mast~werks = @i_werks
-       AND mara~mtart = 'FERT'
+      WHERE mast~werks = @i_werks
+        AND mara~mtart = 'FERT'
       INTO TABLE @lt_pairs.
+    SORT lt_pairs BY header comp.
     DELETE ADJACENT DUPLICATES FROM lt_pairs COMPARING header comp.
     rt_pairs = lt_pairs.
   ENDMETHOD.
@@ -288,10 +289,10 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_comp_mm TYPE ty_t_mm.
     DATA lt_head_mm TYPE ty_t_mm.
     IF lt_comp IS NOT INITIAL.
-      lt_comp_mm = get_mara_makt( it_matnr = lt_comp );
+      lt_comp_mm = get_mara_makt( it_matnr = lt_comp ).
     ENDIF.
     IF lt_head IS NOT INITIAL.
-      lt_head_mm = get_mara_makt( it_matnr = lt_head );
+      lt_head_mm = get_mara_makt( it_matnr = lt_head ).
     ENDIF.
     SORT lt_comp_mm BY matnr.
     SORT lt_head_mm BY matnr.
@@ -303,12 +304,12 @@ CLASS lcl_app IMPLEMENTATION.
 
     LOOP AT it_pairs INTO ls_pair.
       READ TABLE lt_mov_s WITH KEY table_line = ls_pair-comp
-           TRANSPORTING NO FIELDS BINARY SEARCH.
+        TRANSPORTING NO FIELDS BINARY SEARCH.
       IF sy-subrc = 0.
         CONTINUE.
       ENDIF.
       READ TABLE lt_stock_s INTO ls_stock WITH KEY matnr = ls_pair-comp
-           BINARY SEARCH.
+        BINARY SEARCH.
       IF sy-subrc = 0 AND ls_stock-stock <> 0.
         CONTINUE.
       ENDIF.
@@ -316,14 +317,14 @@ CLASS lcl_app IMPLEMENTATION.
       CLEAR ls_bom.
       ls_bom-comp_matnr = ls_pair-comp.
       READ TABLE lt_comp_mm INTO ls_cmm WITH KEY matnr = ls_pair-comp
-           BINARY SEARCH.
+        BINARY SEARCH.
       IF sy-subrc = 0.
         ls_bom-comp_text = ls_cmm-maktx.
       ENDIF.
 
       ls_bom-header_matnr = ls_pair-header.
       READ TABLE lt_head_mm INTO ls_hmm WITH KEY matnr = ls_pair-header
-           BINARY SEARCH.
+        BINARY SEARCH.
       IF sy-subrc = 0.
         ls_bom-header_text = ls_hmm-maktx.
       ENDIF.
