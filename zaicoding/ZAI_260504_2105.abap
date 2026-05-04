@@ -25,8 +25,8 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA lt_result TYPE ty_t_result.
 
-    DATA lt_mov TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
-    DATA lt_stk TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_mov   TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_stk   TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
     DATA lt_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
     " 자재문서 기준 입출고 실적 자재
@@ -82,13 +82,13 @@ CLASS lcl_app IMPLEMENTATION.
       DATA(lv_has_stk) = abap_false.
 
       READ TABLE lt_mov_h WITH TABLE KEY table_line = ls_res-matnr
-        TRANSPORTING NO FIELDS.
+           TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_has_mov = abap_true.
       ENDIF.
 
       READ TABLE lt_stk_h WITH TABLE KEY table_line = ls_res-matnr
-        TRANSPORTING NO FIELDS.
+           TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_has_stk = abap_true.
       ENDIF.
