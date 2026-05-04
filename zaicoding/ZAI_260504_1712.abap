@@ -21,45 +21,50 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    TYPES: BEGIN OF ty_mov,
-             matnr TYPE mseg-matnr,
-             werks TYPE mseg-werks,
-           END OF ty_mov,
-           ty_t_mov TYPE STANDARD TABLE OF ty_mov WITH EMPTY KEY.
+    TYPES:
+      BEGIN OF ty_mov,
+        matnr TYPE mseg-matnr,
+        werks TYPE mseg-werks,
+      END OF ty_mov,
+      ty_t_mov TYPE STANDARD TABLE OF ty_mov WITH EMPTY KEY.
 
-    TYPES: BEGIN OF ty_stock,
-             matnr TYPE mard-matnr,
-             werks TYPE mard-werks,
-             labst TYPE mard-labst,
-           END OF ty_stock,
-           ty_t_stock TYPE STANDARD TABLE OF ty_stock WITH EMPTY KEY.
+    TYPES:
+      BEGIN OF ty_stock,
+        matnr TYPE mard-matnr,
+        werks TYPE mard-werks,
+        labst TYPE mard-labst,
+      END OF ty_stock,
+      ty_t_stock TYPE STANDARD TABLE OF ty_stock WITH EMPTY KEY.
 
-    TYPES: BEGIN OF ty_pair,
-             matnr TYPE mara-matnr,
-             werks TYPE werks_d,
-           END OF ty_pair,
-           ty_t_pair TYPE STANDARD TABLE OF ty_pair WITH EMPTY KEY.
+    TYPES:
+      BEGIN OF ty_pair,
+        matnr TYPE mara-matnr,
+        werks TYPE werks_d,
+      END OF ty_pair,
+      ty_t_pair TYPE STANDARD TABLE OF ty_pair WITH EMPTY KEY.
 
-    TYPES: BEGIN OF ty_desc,
-             matnr TYPE mara-matnr,
-             mtart TYPE mara-mtart,
-             matkl TYPE mara-matkl,
-             maktx TYPE makt-maktx,
-           END OF ty_desc,
-           ty_t_desc TYPE STANDARD TABLE OF ty_desc WITH EMPTY KEY.
+    TYPES:
+      BEGIN OF ty_desc,
+        matnr TYPE mara-matnr,
+        mtart TYPE mara-mtart,
+        matkl TYPE mara-matkl,
+        maktx TYPE makt-maktx,
+      END OF ty_desc,
+      ty_t_desc TYPE STANDARD TABLE OF ty_desc WITH EMPTY KEY.
 
-    TYPES: BEGIN OF ty_result,
-             section  TYPE char10,
-             category TYPE char20,
-             matnr    TYPE mara-matnr,
-             werks    TYPE werks_d,
-             mtart    TYPE mara-mtart,
-             matkl    TYPE mara-matkl,
-             maktx    TYPE makt-maktx,
-             labst    TYPE mard-labst,
-             has_mov  TYPE abap_bool,
-           END OF ty_result,
-           ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
+    TYPES:
+      BEGIN OF ty_result,
+        section  TYPE char10,
+        category TYPE char20,
+        matnr    TYPE mara-matnr,
+        werks    TYPE werks_d,
+        mtart    TYPE mara-mtart,
+        matkl    TYPE mara-matkl,
+        maktx    TYPE makt-maktx,
+        labst    TYPE mard-labst,
+        has_mov  TYPE abap_bool,
+      END OF ty_result,
+      ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
     DATA lt_mov        TYPE ty_t_mov.
     DATA lt_stock      TYPE ty_t_stock.
@@ -68,8 +73,7 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_union_keys TYPE ty_t_pair.
     DATA lt_result     TYPE ty_t_result.
     DATA lt_desc       TYPE ty_t_desc.
-
-    DATA lt_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_matnr      TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
     SELECT DISTINCT
       mseg~matnr,
@@ -124,10 +128,11 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_union_keys BY matnr werks.
     DELETE ADJACENT DUPLICATES FROM lt_union_keys COMPARING matnr werks.
 
-    TYPES: BEGIN OF ty_hash,
-             matnr TYPE mara-matnr,
-             werks TYPE werks_d,
-           END OF ty_hash.
+    TYPES:
+      BEGIN OF ty_hash,
+        matnr TYPE mara-matnr,
+        werks TYPE werks_d,
+      END OF ty_hash.
     DATA lt_h_mov   TYPE HASHED TABLE OF ty_hash WITH UNIQUE KEY matnr werks.
     DATA lt_h_stock TYPE HASHED TABLE OF ty_hash WITH UNIQUE KEY matnr werks.
 
@@ -143,8 +148,8 @@ CLASS lcl_app IMPLEMENTATION.
         matnr   = ls_key-matnr
         werks   = ls_key-werks
         has_mov = COND #( WHEN line_exists(
-                              lt_h_mov[ matnr = ls_key-matnr
-                                        werks = ls_key-werks ] )
+                            lt_h_mov[ matnr = ls_key-matnr
+                                      werks = ls_key-werks ] )
                           THEN abap_true ELSE abap_false )
         labst   = 0 ).
 
@@ -172,8 +177,8 @@ CLASS lcl_app IMPLEMENTATION.
         matnr    = ls_fert-matnr
         werks    = ls_fert-werks
         has_mov  = COND #( WHEN line_exists(
-                               lt_h_mov[ matnr = ls_fert-matnr
-                                         werks = ls_fert-werks ] )
+                             lt_h_mov[ matnr = ls_fert-matnr
+                                       werks = ls_fert-werks ] )
                            THEN abap_true ELSE abap_false )
         labst    = 0 ).
       READ TABLE lt_h_stock_val INTO ls_stock_v
@@ -202,7 +207,8 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_res_c TO lt_result.
     ENDLOOP.
 
-    DELETE ADJACENT DUPLICATES FROM lt_result COMPARING matnr werks section category.
+    DELETE ADJACENT DUPLICATES FROM lt_result
+      COMPARING matnr werks section category.
 
     LOOP AT lt_result INTO DATA(ls_r2).
       APPEND ls_r2-matnr TO lt_matnr.
