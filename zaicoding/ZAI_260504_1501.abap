@@ -50,50 +50,61 @@ CLASS lcl_app DEFINITION FINAL.
     TYPES ty_t_mara_sel TYPE STANDARD TABLE OF ty_mara_sel WITH EMPTY KEY.
 
     CLASS-METHODS select_movements
-      IMPORTING i_werks TYPE werks_d
-                i_beg   TYPE sy-datum
-                i_end   TYPE sy-datum
+      IMPORTING
+        i_werks TYPE werks_d
+        i_beg   TYPE sy-datum
+        i_end   TYPE sy-datum
       RETURNING VALUE(rt_move) TYPE ty_t_matnr.
     CLASS-METHODS select_stock
-      IMPORTING i_werks TYPE werks_d
+      IMPORTING
+        i_werks TYPE werks_d
       RETURNING VALUE(rt_stock) TYPE ty_t_stock.
     CLASS-METHODS select_bom_headers
-      IMPORTING i_werks TYPE werks_d
+      IMPORTING
+        i_werks TYPE werks_d
       RETURNING VALUE(rt_hdr) TYPE ty_t_matnr.
     CLASS-METHODS select_bom_components
-      IMPORTING i_werks TYPE werks_d
+      IMPORTING
+        i_werks TYPE werks_d
       RETURNING VALUE(rt_comp) TYPE ty_t_matnr.
     CLASS-METHODS select_texts
-      IMPORTING it_matnr TYPE ty_t_matnr
+      IMPORTING
+        it_matnr TYPE ty_t_matnr
       RETURNING VALUE(rt_texts) TYPE ty_t_makt.
     CLASS-METHODS select_mara
-      IMPORTING it_matnr TYPE ty_t_matnr
+      IMPORTING
+        it_matnr TYPE ty_t_matnr
       RETURNING VALUE(rt_mara) TYPE ty_t_mara_sel.
     CLASS-METHODS build_main
-      IMPORTING it_move  TYPE ty_t_matnr
-                it_stock TYPE ty_t_stock
-                it_texts TYPE ty_t_makt
-                it_mara  TYPE ty_t_mara_sel
-                i_werks  TYPE werks_d
+      IMPORTING
+        it_move  TYPE ty_t_matnr
+        it_stock TYPE ty_t_stock
+        it_texts TYPE ty_t_makt
+        it_mara  TYPE ty_t_mara_sel
+        i_werks  TYPE werks_d
       RETURNING VALUE(rt_main) TYPE ty_t_main.
     CLASS-METHODS build_bom
-      IMPORTING it_hdr   TYPE ty_t_matnr
-                it_comp  TYPE ty_t_matnr
-                it_move  TYPE ty_t_matnr
-                it_stock TYPE ty_t_stock
-                it_texts TYPE ty_t_makt
-                it_mara  TYPE ty_t_mara_sel
-                i_werks  TYPE werks_d
+      IMPORTING
+        it_hdr   TYPE ty_t_matnr
+        it_comp  TYPE ty_t_matnr
+        it_move  TYPE ty_t_matnr
+        it_stock TYPE ty_t_stock
+        it_texts TYPE ty_t_makt
+        it_mara  TYPE ty_t_mara_sel
+        i_werks  TYPE werks_d
       RETURNING VALUE(rt_bom) TYPE ty_t_bom.
     CLASS-METHODS show_alv
-      IMPORTING it_table TYPE STANDARD TABLE
-                i_title  TYPE string.
+      IMPORTING
+        it_table TYPE STANDARD TABLE
+        i_title  TYPE string.
 ENDCLASS.
 
 CLASS lcl_app IMPLEMENTATION.
   METHOD run.
-    DATA lv_beg TYPE sy-datum VALUE p_beg.
-    DATA lv_end TYPE sy-datum VALUE p_end.
+    DATA lv_beg TYPE sy-datum.
+    DATA lv_end TYPE sy-datum.
+    lv_beg = p_beg.
+    lv_end = p_end.
 
     IF lv_beg GT lv_end.
       DATA lv_tmp TYPE sy-datum.
@@ -333,4 +344,63 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_bom TO lt_bom.
     ENDLOOP.
 
-    LOOP AT it_comp ASSIGNING FIELD-SYMBOL
+    LOOP AT it_comp ASSIGNING FIELD-SYMBOL(<c>).
+      CLEAR ls_bom.
+      ls_bom-kind  = '컴포'.
+      ls_bom-matnr = <c>.
+      ls_bom-werks = i_werks.
+
+      READ TABLE it_texts ASSIGNING FIELD-SYMBOL(<txc>)
+        WITH KEY matnr = <c> spras = sy-langu.
+      IF sy-subrc = 0.
+        ls_bom-maktx = <txc>-maktx.
+      ENDIF.
+
+      READ TABLE it_mara ASSIGNING FIELD-SYMBOL(<mac>)
+        WITH KEY matnr = <c>.
+      IF sy-subrc = 0.
+        ls_bom-mtart = <mac>-mtart.
+      ENDIF.
+
+      READ TABLE it_stock ASSIGNING FIELD-SYMBOL(<stc>)
+        WITH KEY matnr = <c>.
+      IF sy-subrc = 0.
+        ls_bom-stock_qty = <stc>-qty.
+      ELSE.
+        ls_bom-stock_qty = 0.
+      ENDIF.
+
+      IF line_exists( it_move[ table_line = <c> ] ).
+        ls_bom-status = lv_stat_move.
+      ELSEIF ls_bom-stock_qty NE 0.
+        ls_bom-status = lv_stat_stk.
+      ELSE.
+        ls_bom-status = lv_stat_bom.
+      ENDIF.
+
+      APPEND ls_bom TO lt_bom.
+    ENDLOOP.
+
+    rt_bom = lt_bom.
+  ENDMETHOD.
+
+  METHOD show_alv.
+    DATA lo_alv TYPE REF TO cl_salv_table.
+    cl_salv_table=>factory(
+      IMPORTING
+        r_salv_table = lo_alv
+      CHANGING
+        t_table      = it_table ).
+
+    DATA(lo_disp) = lo_alv->get_display_settings( ).
+    lo_disp->set_list_header( i_title ).
+
+    DATA(lo_func) = lo_alv->get_functions( ).
+    lo_func->set_all( abap_true ).
+
+    lo_alv->display( ).
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  lcl_app=>run( ).
