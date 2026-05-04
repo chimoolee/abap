@@ -1,7 +1,8 @@
 REPORT ZAI_260504_2006.
 
-SELECT-OPTIONS: s_budat FOR mkpf-budat,
-                 s_werks FOR t001w-werks.
+SELECT-OPTIONS:
+  s_budat FOR mkpf-budat,
+  s_werks FOR t001w-werks.
 
 CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
@@ -45,7 +46,7 @@ CLASS lcl_app IMPLEMENTATION.
         maktx  TYPE makt-maktx,
         werks  TYPE mseg-werks,
         qty    TYPE mard-labst,
-        status TYPE char20,
+        status TYPE c LENGTH 20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
@@ -62,10 +63,10 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA lt_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
-    " 1) Materials with goods movements (by posting date and plant)
+    " 1) Materials with goods movements (posting date and plant)
     SELECT DISTINCT
-           mseg~matnr,
-           mseg~werks
+      mseg~matnr,
+      mseg~werks
       FROM mseg
       INNER JOIN mkpf
         ON mkpf~mblnr = mseg~mblnr
@@ -76,9 +77,9 @@ CLASS lcl_app IMPLEMENTATION.
 
     " 2) Materials with current non-zero stock by plant
     SELECT
-           mard~matnr,
-           mard~werks,
-           SUM( mard~labst ) AS qty
+      mard~matnr,
+      mard~werks,
+      SUM( mard~labst ) AS qty
       FROM mard
       INTO TABLE @lt_stock
       WHERE mard~werks IN @s_werks
@@ -106,10 +107,10 @@ CLASS lcl_app IMPLEMENTATION.
 
     IF lt_matnr IS NOT INITIAL.
       SELECT
-             mara~matnr,
-             mara~mtart,
-             mara~matkl,
-             makt~maktx
+        mara~matnr,
+        mara~mtart,
+        mara~matkl,
+        makt~maktx
         FROM mara
         LEFT JOIN makt
           ON makt~matnr = mara~matnr
@@ -129,7 +130,7 @@ CLASS lcl_app IMPLEMENTATION.
       ls_res-werks = ls_key-werks.
 
       READ TABLE lt_master INTO ls_mst
-           WITH KEY matnr = ls_key-matnr BINARY SEARCH.
+        WITH KEY matnr = ls_key-matnr BINARY SEARCH.
       IF sy-subrc = 0.
         ls_res-mtart = ls_mst-mtart.
         ls_res-matkl = ls_mst-matkl.
@@ -137,8 +138,8 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
 
       READ TABLE lt_stock INTO ls_stk
-           WITH KEY matnr = ls_key-matnr werks = ls_key-werks
-           BINARY SEARCH.
+        WITH KEY matnr = ls_key-matnr werks = ls_key-werks
+        BINARY SEARCH.
       IF sy-subrc = 0.
         ls_res-qty = ls_stk-qty.
       ELSE.
@@ -146,9 +147,9 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
 
       READ TABLE lt_mov WITH KEY matnr = ls_key-matnr
-                               werks = ls_key-werks
-                               TRANSPORTING NO FIELDS
-                               BINARY SEARCH.
+                                   werks = ls_key-werks
+        TRANSPORTING NO FIELDS
+        BINARY SEARCH.
       IF sy-subrc <> 0 AND ls_res-qty <> 0.
         ls_res-status = '재고만 있음'.
       ELSE.
