@@ -62,8 +62,7 @@ CLASS lcl_app IMPLEMENTATION.
     lv_today = sy-datum.
 
     IF p_datf IS INITIAL AND p_datt IS INITIAL.
-      DATA(lv_from) = lv_today.
-      lv_from = lv_from - 30.
+      DATA(lv_from) = lv_today - 30.
       p_datf = lv_from.
       p_datt = lv_today.
     ENDIF.
@@ -134,7 +133,7 @@ CLASS lcl_app IMPLEMENTATION.
 
       DATA(lv_has_mov) = abap_false.
       READ TABLE lt_mov_matnr WITH KEY table_line = <mat>
-        BINARY SEARCH TRANSPORTING NO FIELDS.
+           BINARY SEARCH TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_has_mov = abap_true.
       ENDIF.
@@ -154,13 +153,13 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
 
       APPEND VALUE ty_main(
-        matnr  = <ma>-matnr
-        maktx  = lv_maktx
-        mtart  = <ma>-mtart
-        matkl  = <ma>-matkl
-        meins  = <ma>-meins
-        qty    = lv_qty
-        status = lv_status ) TO lt_main.
+               matnr  = <ma>-matnr
+               maktx  = lv_maktx
+               mtart  = <ma>-mtart
+               matkl  = <ma>-matkl
+               meins  = <ma>-meins
+               qty    = lv_qty
+               status = lv_status ) TO lt_main.
     ENDLOOP.
 
     SELECT DISTINCT mast~matnr
@@ -188,7 +187,7 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_all_mats.
     LOOP AT lt_bom_cand ASSIGNING FIELD-SYMBOL(<bmat>).
       READ TABLE lt_all_mats WITH KEY table_line = <bmat>
-        BINARY SEARCH TRANSPORTING NO FIELDS.
+           BINARY SEARCH TRANSPORTING NO FIELDS.
       IF sy-subrc <> 0.
         APPEND <bmat> TO lt_bom_only.
       ENDIF.
@@ -223,13 +222,13 @@ CLASS lcl_app IMPLEMENTATION.
         ENDIF.
 
         APPEND VALUE ty_main(
-          matnr  = <ma>-matnr
-          maktx  = lv_bm_maktx
-          mtart  = <ma>-mtart
-          matkl  = <ma>-matkl
-          meins  = <ma>-meins
-          qty    = 0
-          status = |BOM 만 있음| ) TO lt_bom.
+                 matnr  = <ma>-matnr
+                 maktx  = lv_bm_maktx
+                 mtart  = <ma>-mtart
+                 matkl  = <ma>-matkl
+                 meins  = <ma>-meins
+                 qty    = 0
+                 status = |BOM 만 있음| ) TO lt_bom.
       ENDLOOP.
     ENDIF.
 
