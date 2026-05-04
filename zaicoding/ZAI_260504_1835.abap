@@ -1,5 +1,8 @@
 REPORT ZAI_260504_1835.
 
+TABLES mara.
+TABLES mard.
+
 SELECT-OPTIONS s_budat FOR mkpf-budat.
 SELECT-OPTIONS s_werks FOR t001w-werks.
 
@@ -30,12 +33,12 @@ CLASS lcl_app IMPLEMENTATION.
       END OF ty_matdet,
       ty_t_matdet TYPE STANDARD TABLE OF ty_matdet WITH EMPTY KEY,
       BEGIN OF ty_result,
-        matnr TYPE mara-matnr,
-        werks TYPE mard-werks,
-        mtart TYPE mara-mtart,
-        matkl TYPE mara-matkl,
-        maktx TYPE makt-maktx,
-        labst TYPE mard-labst,
+        matnr  TYPE mara-matnr,
+        werks  TYPE mard-werks,
+        mtart  TYPE mara-mtart,
+        matkl  TYPE mara-matkl,
+        maktx  TYPE makt-maktx,
+        labst  TYPE mard-labst,
         status TYPE char20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
@@ -48,10 +51,10 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA lt_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
-    " 1) Movements by plant and posting date
+*   1) Materials with movements in date range and plant
     SELECT DISTINCT
-           mseg~matnr,
-           mseg~werks
+      mseg~matnr,
+      mseg~werks
       FROM mseg
       INNER JOIN mkpf
         ON mkpf~mblnr = mseg~mblnr
@@ -62,7 +65,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     SORT lt_move BY matnr werks.
 
-    " 2) Current stock (non-zero) by plant
+*   2) Current non-zero stock by plant
     SELECT
       mard~matnr,
       mard~werks,
@@ -75,11 +78,12 @@ CLASS lcl_app IMPLEMENTATION.
 
     SORT lt_stock BY matnr werks.
 
-    " 3) Union keys (materials per plant) from movements and stocks
+*   3) Union of keys (matnr/werks) from movements and stock
     lt_keys = lt_move.
     LOOP AT lt_stock INTO DATA(ls_stock_key).
-      APPEND VALUE ty_move( matnr = ls_stock_key-matnr
-                            werks = ls_stock_key-werks ) TO lt_keys.
+      APPEND VALUE ty_move(
+        matnr = ls_stock_key-matnr
+        werks = ls_stock_key-werks ) TO lt_keys.
     ENDLOOP.
     SORT lt_keys BY matnr werks.
     DELETE ADJACENT DUPLICATES FROM lt_keys COMPARING matnr werks.
@@ -89,14 +93,14 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    " 4) Collect material list
+*   4) Collect material list for text/attributes
     LOOP AT lt_keys INTO DATA(ls_key).
       APPEND ls_key-matnr TO lt_matnr.
     ENDLOOP.
     SORT lt_matnr.
     DELETE ADJACENT DUPLICATES FROM lt_matnr.
 
-    " 5) Read material details with text
+*   5) Read material attributes and text
     SELECT
       mara~matnr,
       mara~mtart,
@@ -111,30 +115,31 @@ CLASS lcl_app IMPLEMENTATION.
 
     SORT lt_matdet BY matnr.
 
-    " 6) Build final result
+*   6) Build final result
     LOOP AT lt_keys INTO ls_key.
       DATA(lv_has_move) = abap_false.
-      READ TABLE lt_move WITH KEY matnr = ls_key-matnr
-                                 werks = ls_key-werks
-                        TRANSPORTING NO FIELDS
-                        BINARY SEARCH.
+      READ TABLE lt_move WITH KEY
+        matnr = ls_key-matnr
+        werks = ls_key-werks
+        TRANSPORTING NO FIELDS
+        BINARY SEARCH.
       IF sy-subrc = 0.
         lv_has_move = abap_true.
       ENDIF.
 
       DATA(lv_labst) = CONV mard-labst( 0 ).
       READ TABLE lt_stock INTO ls_stock_key
-           WITH KEY matnr = ls_key-matnr
-                    werks = ls_key-werks
-           BINARY SEARCH.
+        WITH KEY matnr = ls_key-matnr
+                 werks = ls_key-werks
+        BINARY SEARCH.
       IF sy-subrc = 0.
         lv_labst = ls_stock_key-labst.
       ENDIF.
 
       DATA(ls_matdet) = VALUE ty_matdet( ).
       READ TABLE lt_matdet INTO ls_matdet
-           WITH KEY matnr = ls_key-matnr
-           BINARY SEARCH.
+        WITH KEY matnr = ls_key-matnr
+        BINARY SEARCH.
 
       DATA(lv_status) = CONV char20( '' ).
       IF lv_has_move = abap_true.
@@ -148,4 +153,24 @@ CLASS lcl_app IMPLEMENTATION.
         werks  = ls_key-werks
         mtart  = ls_matdet-mtart
         matkl  = ls_matdet-matkl
-        maktx  = ls_matdet-m
+        maktx  = ls_matdet-maktx
+        labst  = lv_labst
+        status = lv_status ) TO lt_result.
+    ENDLOOP.
+
+*   7) Display ALV
+    DATA lo_alv TYPE REF TO cl_salv_table.
+    cl_salv_table=>factory(
+      IMPORTING
+        r_salv_table = lo_alv
+      CHANGING
+        t_table      = lt_result ).
+
+    lo_alv->get_functions( )->set_all( abap_true ).
+    lo_alv->get_columns( )->set_optimize( abap_true ).
+    lo_alv->display( ).
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  lcl_app=>run( ).
