@@ -52,19 +52,19 @@ CLASS lcl_app DEFINITION FINAL.
       RETURNING VALUE(rt_texts) TYPE STANDARD TABLE OF makt WITH EMPTY KEY.
 
     CLASS-METHODS fill_main
-      IMPORTING it_all    TYPE ty_t_matnr
-                it_mov    TYPE ty_t_matnr
-                it_stock  TYPE ty_t_stock
+      IMPORTING it_all   TYPE ty_t_matnr
+                it_mov   TYPE ty_t_matnr
+                it_stock TYPE ty_t_stock
       RETURNING VALUE(rt_main) TYPE ty_t_main.
 
     CLASS-METHODS build_bom_section
-      IMPORTING i_werks TYPE werks_d
-                it_mov  TYPE ty_t_matnr
+      IMPORTING i_werks  TYPE werks_d
+                it_mov   TYPE ty_t_matnr
                 it_stock TYPE ty_t_stock
       RETURNING VALUE(rt_bom) TYPE ty_t_bomsec.
 
     CLASS-METHODS display_alv
-      IMPORTING it_tab TYPE STANDARD TABLE
+      IMPORTING it_tab  TYPE STANDARD TABLE
                 iv_title TYPE string.
 ENDCLASS.
 
@@ -79,7 +79,6 @@ CLASS lcl_app IMPLEMENTATION.
     lt_mov   = get_movements( i_werks = p_werks i_begda = p_begda i_endda = p_endda ).
     lt_stock = get_stocks( i_werks = p_werks ).
 
-    " Union of materials having movements or non-zero stock
     lt_all = lt_mov.
     LOOP AT lt_stock ASSIGNING FIELD-SYMBOL(<ls_stk>).
       INSERT <ls_stk>-matnr INTO TABLE lt_all.
@@ -94,7 +93,7 @@ CLASS lcl_app IMPLEMENTATION.
 
   METHOD get_movements.
     SELECT DISTINCT
-           md~matnr
+      md~matnr
       FROM matdoc AS md
       WHERE md~werks       = @i_werks
         AND md~pstng_date >= @i_begda
@@ -117,6 +116,7 @@ CLASS lcl_app IMPLEMENTATION.
     IF it_matnr IS INITIAL.
       RETURN.
     ENDIF.
+
     SELECT
       t~matnr,
       t~spras,
@@ -138,7 +138,6 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    " Basic data
     SELECT
       a~matnr,
       a~mtart,
@@ -192,9 +191,8 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_mara TYPE STANDARD TABLE OF mara WITH EMPTY KEY.
     DATA ls_bom TYPE ty_bomsec.
 
-    " Finished goods with BOM in plant
     SELECT DISTINCT
-           ma~matnr
+      ma~matnr
       FROM mast AS ma
       INNER JOIN mara AS a
         ON a~matnr = ma~matnr
@@ -202,29 +200,26 @@ CLASS lcl_app IMPLEMENTATION.
         AND a~mtart = 'FERT'
       INTO TABLE @lt_fert_bom.
 
-    " Component materials used in BOMs of the plant
     SELECT DISTINCT
-           st~idnrk
+      st~idnrk
       FROM mast AS ma
       INNER JOIN stpo AS st
         ON st~stlnr = ma~stlnr
       WHERE ma~werks = @i_werks
       INTO TABLE @lt_comp_all.
 
-    " Filter components: no movement and no stock
     LOOP AT lt_comp_all ASSIGNING FIELD-SYMBOL(<lcomp>).
-      READ TABLE i_mov WITH KEY table_line = <lcomp> TRANSPORTING NO FIELDS.
+      READ TABLE it_mov WITH KEY table_line = <lcomp> TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         CONTINUE.
       ENDIF.
-      READ TABLE i_stock ASSIGNING FIELD-SYMBOL(<ls_stk>) WITH KEY matnr = <lcomp>.
-      IF sy-subrc = 0 AND <ls_stk>-labst <> 0.
+      READ TABLE it_stock ASSIGNING FIELD-SYMBOL(<ls_stk2>) WITH KEY matnr = <lcomp>.
+      IF sy-subrc = 0 AND <ls_stk2>-labst <> 0.
         CONTINUE.
       ENDIF.
       INSERT <lcomp> INTO TABLE lt_comp_filtered.
     ENDLOOP.
 
-    " Collect all materials for BOM section text/basic data
     DATA lt_all_bom TYPE ty_t_matnr.
     lt_all_bom = lt_fert_bom.
     LOOP AT lt_comp_filtered ASSIGNING FIELD-SYMBOL(<lc2>).
@@ -246,39 +241,37 @@ CLASS lcl_app IMPLEMENTATION.
 
     lt_texts = get_texts( it_matnr = lt_all_bom ).
 
-    " Build FERT BOM rows
     LOOP AT lt_fert_bom ASSIGNING FIELD-SYMBOL(<lfb>).
       CLEAR ls_bom.
-      READ TABLE lt_mara ASSIGNING FIELD-SYMBOL(<la>) WITH KEY matnr = <lfb>.
+      READ TABLE lt_mara ASSIGNING FIELD-SYMBOL(<la2>) WITH KEY matnr = <lfb>.
       IF sy-subrc <> 0.
         CONTINUE.
       ENDIF.
-      ls_bom-matnr = <la>-matnr.
-      ls_bom-mtart = <la>-mtart.
-      ls_bom-matkl = <la>-matkl.
-      ls_bom-meins = <la>-meins.
-      READ TABLE lt_texts ASSIGNING FIELD-SYMBOL(<ltx>) WITH KEY matnr = <la>-matnr spras = sy-langu.
+      ls_bom-matnr = <la2>-matnr.
+      ls_bom-mtart = <la2>-mtart.
+      ls_bom-matkl = <la2>-matkl.
+      ls_bom-meins = <la2>-meins.
+      READ TABLE lt_texts ASSIGNING FIELD-SYMBOL(<ltx2>) WITH KEY matnr = <la2>-matnr spras = sy-langu.
       IF sy-subrc = 0.
-        ls_bom-maktx = <ltx>-maktx.
+        ls_bom-maktx = <ltx2>-maktx.
       ENDIF.
       ls_bom-status = |완제품 BOM|.
       APPEND ls_bom TO rt_bom.
     ENDLOOP.
 
-    " Build BOM-only component rows
     LOOP AT lt_comp_filtered ASSIGNING FIELD-SYMBOL(<lcf>).
       CLEAR ls_bom.
-      READ TABLE lt_mara ASSIGNING <la> WITH KEY matnr = <lcf>.
+      READ TABLE lt_mara ASSIGNING <la2> WITH KEY matnr = <lcf>.
       IF sy-subrc <> 0.
         CONTINUE.
       ENDIF.
-      ls_bom-matnr = <la>-matnr.
-      ls_bom-mtart = <la>-mtart.
-      ls_bom-matkl = <la>-matkl.
-      ls_bom-meins = <la>-meins.
-      READ TABLE lt_texts ASSIGNING <ltx> WITH KEY matnr = <la>-matnr spras = sy-langu.
+      ls_bom-matnr = <la2>-matnr.
+      ls_bom-mtart = <la2>-mtart.
+      ls_bom-matkl = <la2>-matkl.
+      ls_bom-meins = <la2>-meins.
+      READ TABLE lt_texts ASSIGNING <ltx2> WITH KEY matnr = <la2>-matnr spras = sy-langu.
       IF sy-subrc = 0.
-        ls_bom-maktx = <ltx>-maktx.
+        ls_bom-maktx = <ltx2>-maktx.
       ENDIF.
       ls_bom-status = |BOM 만 있음|.
       APPEND ls_bom TO rt_bom.
