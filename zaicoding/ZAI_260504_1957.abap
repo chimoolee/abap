@@ -1,7 +1,9 @@
 REPORT ZAI_260504_1957.
 
+TABLES mara.
+
 SELECT-OPTIONS:
-  s_budat FOR mkpf-budat,
+  s_budat FOR sy-datum,
   s_werks FOR mseg-werks.
 
 CLASS lcl_app DEFINITION FINAL.
@@ -45,7 +47,7 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_attr        TYPE ty_t_attr_h.
     DATA lt_matnr       TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
-    " 1) Materials with postings in date range per plant (optional filters)
+    " 1) Materials with postings in date range per plant
     SELECT DISTINCT
       s~matnr,
       s~werks
@@ -59,7 +61,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     lt_post_hash = CORRESPONDING ty_t_key_h( lt_post ).
 
-    " 2) Materials with current non-zero stock per plant (optional plant filter)
+    " 2) Materials with current non-zero stock per plant
     SELECT DISTINCT
       mard~matnr,
       mard~werks
@@ -77,8 +79,8 @@ CLASS lcl_app IMPLEMENTATION.
     ENDLOOP.
 
     " 4) Collect material list
-    LOOP AT lt_union_hash INTO DATA(ls_key).
-      APPEND ls_key-matnr TO lt_matnr.
+    LOOP AT lt_union_hash INTO DATA(ls_key_all).
+      APPEND ls_key_all-matnr TO lt_matnr.
     ENDLOOP.
     SORT lt_matnr BY table_line.
     DELETE ADJACENT DUPLICATES FROM lt_matnr COMPARING table_line.
@@ -100,7 +102,7 @@ CLASS lcl_app IMPLEMENTATION.
     ENDIF.
 
     " 6) Build result with status
-    LOOP AT lt_union_hash INTO ls_key.
+    LOOP AT lt_union_hash INTO DATA(ls_key).
       DATA(lv_has_post) = xsdbool(
         line_exists( lt_post_hash[ matnr = ls_key-matnr werks = ls_key-werks ] ) ).
       DATA(lv_has_stock) = xsdbool(
