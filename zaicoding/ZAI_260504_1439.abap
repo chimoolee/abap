@@ -1,7 +1,7 @@
 REPORT ZAI_260504_1439.
 
 PARAMETERS p_werks TYPE werks_d OBLIGATORY.
-PARAMETERS p_from  TYPE sy-datum DEFAULT sy-datum - 30 OBLIGATORY.
+PARAMETERS p_from  TYPE sy-datum DEFAULT sy-datum OBLIGATORY.
 PARAMETERS p_to    TYPE sy-datum DEFAULT sy-datum OBLIGATORY.
 
 CLASS lcl_app DEFINITION FINAL.
@@ -11,7 +11,8 @@ ENDCLASS.
 
 CLASS lcl_app IMPLEMENTATION.
   METHOD run.
-    TYPES: ty_t_matnr  TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    TYPES: ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+
     TYPES: BEGIN OF ty_stock,
              matnr TYPE mara-matnr,
              qty   TYPE mard-labst,
@@ -37,23 +38,33 @@ CLASS lcl_app IMPLEMENTATION.
            END OF ty_out.
     TYPES ty_t_out TYPE STANDARD TABLE OF ty_out WITH EMPTY KEY.
 
-    DATA lt_mv_matnr     TYPE ty_t_matnr.
-    DATA lt_stock        TYPE ty_t_stock.
-    DATA lt_all_matnr    TYPE ty_t_matnr.
-    DATA lt_mara         TYPE ty_t_mara.
-    DATA lt_bom_fert     TYPE ty_t_matnr.
-    DATA lt_bom_comp     TYPE ty_t_matnr.
-    DATA lt_out          TYPE ty_t_out.
+    DATA lt_mv_matnr  TYPE ty_t_matnr.
+    DATA lt_stock     TYPE ty_t_stock.
+    DATA lt_all_matnr TYPE ty_t_matnr.
+    DATA lt_mara      TYPE ty_t_mara.
+    DATA lt_bom_fert  TYPE ty_t_matnr.
+    DATA lt_bom_comp  TYPE ty_t_matnr.
+    DATA lt_out       TYPE ty_t_out.
 
-    DATA ls_out          TYPE ty_out.
-    DATA ls_stock        TYPE ty_stock.
-    DATA ls_mara         TYPE ty_mara.
+    DATA ls_out   TYPE ty_out.
+    DATA ls_stock TYPE ty_stock.
+    DATA ls_mara  TYPE ty_mara.
+
+    DATA lv_from TYPE sy-datum.
+    DATA lv_to   TYPE sy-datum.
+    lv_from = p_from.
+    lv_to   = p_to.
+    IF lv_from > lv_to.
+      DATA(lv_tmp) = lv_from.
+      lv_from = lv_to.
+      lv_to   = lv_tmp.
+    ENDIF.
 
     " 1) Materials with movement in period at plant (MATDOC)
     SELECT DISTINCT matdoc~matnr
       FROM matdoc
       WHERE matdoc~werks = @p_werks
-        AND matdoc~budat_mkpf BETWEEN @p_from AND @p_to
+        AND matdoc~budat_mkpf BETWEEN @lv_from AND @lv_to
       INTO TABLE @lt_mv_matnr.
 
     " 2) Materials with non-zero current stock at plant (MARD)
@@ -111,7 +122,7 @@ CLASS lcl_app IMPLEMENTATION.
       ELSEIF ls_out-has_mvmt = abap_false AND ls_out-stock_qty <> 0.
         ls_out-status = '재고만 있음'.
       ELSE.
-        CONTINUE. " Should not occur by construction
+        CONTINUE.
       ENDIF.
 
       APPEND ls_out TO lt_out.
@@ -169,12 +180,19 @@ CLASS lcl_app IMPLEMENTATION.
       READ TABLE lt_stock INTO ls_stock WITH KEY matnr = lv_matnr.
       IF sy-subrc = 0.
         ls_out-stock_qty = ls_stock-qty.
+      ELSE.
+        ls_out-stock_qty = 0.
       ENDIF.
 
       READ TABLE lt_mv_matnr WITH KEY table_line = lv_matnr TRANSPORTING NO FIELDS.
       ls_out-has_mvmt = COND abap_bool( WHEN sy-subrc = 0 THEN abap_true ELSE abap_false ).
 
-      ls_out-status = 'BOM 보유'.
+      IF ls_out-has_mvmt = abap_true OR ls_out-stock_qty <> 0.
+        ls_out-status = 'BOM 보유'.
+      ELSE.
+        ls_out-status = 'BOM 보유'.
+      ENDIF.
+
       APPEND ls_out TO lt_out.
     ENDLOOP.
 
@@ -182,11 +200,11 @@ CLASS lcl_app IMPLEMENTATION.
     LOOP AT lt_bom_comp INTO lv_matnr.
       READ TABLE lt_stock WITH KEY matnr = lv_matnr TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
-        CONTINUE. " has stock -> not BOM-only
+        CONTINUE.
       ENDIF.
       READ TABLE lt_mv_matnr WITH KEY table_line = lv_matnr TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
-        CONTINUE. " has movement -> not BOM-only
+        CONTINUE.
       ENDIF.
 
       CLEAR ls_out.
