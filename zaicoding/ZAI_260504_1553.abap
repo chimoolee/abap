@@ -52,7 +52,7 @@ CLASS lcl_app DEFINITION FINAL.
 
     CLASS-METHODS get_stock_sum
       IMPORTING
-        i_werks TYPE werks_d
+        i_werks  TYPE werks_d
         it_matnr TYPE ty_t_matnr
       RETURNING VALUE(rt_sum) TYPE ty_t_stock_sum.
 
@@ -189,12 +189,18 @@ CLASS lcl_app IMPLEMENTATION.
       rt_sum = lt.
       RETURN.
     ENDIF.
+
+    DATA lr_matnr TYPE RANGE OF mara-matnr.
+    LOOP AT it_matnr ASSIGNING FIELD-SYMBOL(<m>).
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = <m> ) TO lr_matnr.
+    ENDLOOP.
+
     SELECT
            mard~matnr,
            SUM( mard~labst ) AS qty
       FROM mard
      WHERE mard~werks = @i_werks
-       AND mard~matnr IN @it_matnr
+       AND mard~matnr IN @lr_matnr
      GROUP BY mard~matnr
       INTO TABLE @lt.
     rt_sum = lt.
@@ -240,12 +246,18 @@ CLASS lcl_app IMPLEMENTATION.
       rt_texts = lt.
       RETURN.
     ENDIF.
+
+    DATA lr_matnr TYPE RANGE OF mara-matnr.
+    LOOP AT it_matnr ASSIGNING FIELD-SYMBOL(<m>).
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = <m> ) TO lr_matnr.
+    ENDLOOP.
+
     SELECT
            makt~matnr,
            makt~spras,
            makt~maktx
       FROM makt
-     WHERE makt~matnr IN @it_matnr
+     WHERE makt~matnr IN @lr_matnr
        AND makt~spras = @sy-langu
       INTO TABLE @lt.
     rt_texts = lt.
