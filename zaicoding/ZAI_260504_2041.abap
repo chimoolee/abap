@@ -1,5 +1,7 @@
 REPORT ZAI_260504_2041.
 
+TABLES: mara, mard.
+
 SELECT-OPTIONS:
   s_budat FOR mkpf-budat,
   s_werks FOR mseg-werks.
@@ -52,7 +54,7 @@ CLASS lcl_app IMPLEMENTATION.
         matkl  TYPE mara-matkl,
         maktx  TYPE makt-maktx,
         qty    TYPE mard-labst,
-        status TYPE char20,
+        status TYPE c LENGTH 20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
@@ -68,7 +70,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA lo_alv TYPE REF TO cl_salv_table.
 
-    " Movements by posting date and plant
+*   Movements by posting date and plant
     SELECT DISTINCT
       mseg~matnr,
       mseg~werks
@@ -81,7 +83,7 @@ CLASS lcl_app IMPLEMENTATION.
         AND mseg~werks IN @s_werks
         AND mseg~matnr IS NOT NULL.
 
-    " Current non-zero stock per material and plant
+*   Current non-zero stock per material and plant
     SELECT
       matnr,
       werks,
@@ -94,7 +96,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     lt_stock_h = lt_stock.
 
-    " Build union key set (matnr, werks)
+*   Build union key set (matnr, werks)
     LOOP AT lt_move INTO DATA(ls_move).
       INSERT VALUE ty_key( matnr = ls_move-matnr werks = ls_move-werks ) INTO TABLE lt_keys.
     ENDLOOP.
@@ -105,7 +107,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     lt_keys_std = CORRESPONDING ty_t_key_std( lt_keys ).
 
-    " Prepare material list for text/master data
+*   Prepare material list for text/master data
     LOOP AT lt_keys_std INTO DATA(ls_key).
       APPEND ls_key-matnr TO lt_matnr.
     ENDLOOP.
@@ -128,10 +130,11 @@ CLASS lcl_app IMPLEMENTATION.
       lt_mat = CORRESPONDING ty_t_mat_hash( lt_mat_tmp ).
     ENDIF.
 
-    " Build final result
+*   Build final result
     LOOP AT lt_keys_std INTO ls_key.
       DATA(ls_res) = VALUE ty_result( matnr = ls_key-matnr werks = ls_key-werks ).
-      " Material master/text
+
+*     Material master/text
       READ TABLE lt_mat WITH TABLE KEY matnr = ls_key-matnr INTO DATA(ls_mat).
       IF sy-subrc = 0.
         ls_res-mtart = ls_mat-mtart.
@@ -139,7 +142,7 @@ CLASS lcl_app IMPLEMENTATION.
         ls_res-maktx = ls_mat-maktx.
       ENDIF.
 
-      " Stock qty if any
+*     Stock qty if any
       READ TABLE lt_stock_h WITH TABLE KEY matnr = ls_key-matnr werks = ls_key-werks INTO DATA(ls_stk).
       IF sy-subrc = 0.
         ls_res-qty = ls_stk-qty.
@@ -147,7 +150,7 @@ CLASS lcl_app IMPLEMENTATION.
         ls_res-qty = 0.
       ENDIF.
 
-      " Status
+*     Status
       DATA(lv_has_move) = abap_false.
       READ TABLE lt_move WITH KEY matnr = ls_key-matnr werks = ls_key-werks TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
@@ -165,7 +168,7 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_res TO lt_result.
     ENDLOOP.
 
-    " Display
+*   Display
     cl_salv_table=>factory(
       IMPORTING
         r_salv_table = lo_alv
