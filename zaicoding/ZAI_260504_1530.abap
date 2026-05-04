@@ -131,9 +131,10 @@ CLASS lcl_app IMPLEMENTATION.
         lv_qty = <st>-qty.
       ENDIF.
 
-      DATA(lv_has_mov) = abap_false.
+      DATA(lv_has_mov) TYPE abap_bool.
+      lv_has_mov = abap_false.
       READ TABLE lt_mov_matnr WITH KEY table_line = <mat>
-           BINARY SEARCH TRANSPORTING NO FIELDS.
+        BINARY SEARCH TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_has_mov = abap_true.
       ENDIF.
@@ -187,7 +188,7 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_all_mats.
     LOOP AT lt_bom_cand ASSIGNING FIELD-SYMBOL(<bmat>).
       READ TABLE lt_all_mats WITH KEY table_line = <bmat>
-           BINARY SEARCH TRANSPORTING NO FIELDS.
+        BINARY SEARCH TRANSPORTING NO FIELDS.
       IF sy-subrc <> 0.
         APPEND <bmat> TO lt_bom_only.
       ENDIF.
