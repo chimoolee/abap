@@ -37,7 +37,7 @@ CLASS lcl_app DEFINITION FINAL.
              stlnr  TYPE mast-stlnr,
            END OF ty_parent.
     TYPES ty_t_parent TYPE STANDARD TABLE OF ty_parent WITH EMPTY KEY.
-    TYPES ty_t_stlnr TYPE STANDARD TABLE OF stpo-stlnr WITH EMPTY KEY.
+    TYPES ty_t_stlnr  TYPE STANDARD TABLE OF stpo-stlnr WITH EMPTY KEY.
 
     TYPES: BEGIN OF ty_bom_only,
              parent  TYPE mara-matnr,
@@ -68,7 +68,7 @@ CLASS lcl_app IMPLEMENTATION.
     SELECT matdoc~matnr
       FROM matdoc
       WHERE matdoc~werks = @p_werks
-        AND matdoc~budat BETWEEN @p_dlo AND @p_dhi
+        AND matdoc~budat_mkpf BETWEEN @p_dlo AND @p_dhi
         AND matdoc~matnr IS NOT NULL
       INTO TABLE @lt_mov_matnr.
     SORT lt_mov_matnr.
@@ -116,17 +116,17 @@ CLASS lcl_app IMPLEMENTATION.
         ls_res-mtart = <ls_ma>-mtart.
 
         READ TABLE lt_makt ASSIGNING FIELD-SYMBOL(<ls_tx>)
-          WITH KEY matnr = <ls_ma>-matnr BINARY SEARCH.
+             WITH KEY matnr = <ls_ma>-matnr BINARY SEARCH.
         IF sy-subrc = 0.
           ls_res-maktx = <ls_tx>-maktx.
         ENDIF.
 
         READ TABLE lt_mov_matnr WITH KEY table_line = <ls_ma>-matnr
-          TRANSPORTING NO FIELDS BINARY SEARCH.
+             TRANSPORTING NO FIELDS BINARY SEARCH.
         ls_res-has_mov = xsdbool( sy-subrc = 0 ).
 
         READ TABLE lt_stock_matnr WITH KEY table_line = <ls_ma>-matnr
-          TRANSPORTING NO FIELDS BINARY SEARCH.
+             TRANSPORTING NO FIELDS BINARY SEARCH.
         ls_res-has_stock = xsdbool( sy-subrc = 0 ).
 
         IF ls_res-has_mov = abap_true.
@@ -182,12 +182,12 @@ CLASS lcl_app IMPLEMENTATION.
       DATA lt_bom_comp_only TYPE ty_t_matnr.
       LOOP AT lt_comp_all ASSIGNING FIELD-SYMBOL(<lv_cmat>).
         READ TABLE lt_mov_matnr WITH KEY table_line = <lv_cmat>
-          TRANSPORTING NO FIELDS BINARY SEARCH.
+             TRANSPORTING NO FIELDS BINARY SEARCH.
         IF sy-subrc = 0.
           CONTINUE.
         ENDIF.
         READ TABLE lt_stock_matnr WITH KEY table_line = <lv_cmat>
-          TRANSPORTING NO FIELDS BINARY SEARCH.
+             TRANSPORTING NO FIELDS BINARY SEARCH.
         IF sy-subrc = 0.
           CONTINUE.
         ENDIF.
@@ -215,7 +215,7 @@ CLASS lcl_app IMPLEMENTATION.
 
         LOOP AT lt_map ASSIGNING FIELD-SYMBOL(<ls_map>).
           READ TABLE lt_parents ASSIGNING FIELD-SYMBOL(<ls_par>)
-            WITH KEY stlnr = <ls_map>-stlnr BINARY SEARCH.
+               WITH KEY stlnr = <ls_map>-stlnr BINARY SEARCH.
           IF sy-subrc <> 0.
             CONTINUE.
           ENDIF.
@@ -225,7 +225,7 @@ CLASS lcl_app IMPLEMENTATION.
           ls_bom-comp   = <ls_map>-matnr.
 
           READ TABLE lt_comp_tx ASSIGNING FIELD-SYMBOL(<ls_ctx>)
-            WITH KEY matnr = <ls_map>-matnr BINARY SEARCH.
+               WITH KEY matnr = <ls_map>-matnr BINARY SEARCH.
           IF sy-subrc = 0.
             ls_bom-comp_tx = <ls_ctx>-maktx.
           ENDIF.
@@ -244,7 +244,7 @@ CLASS lcl_app IMPLEMENTATION.
     lo_alv->get_columns( )->set_optimize( abap_true ).
     lo_alv->get_functions( )->set_all( abap_true ).
     lo_alv->get_display_settings( )->set_list_header(
-      value = '완제품 BOM 요소 - 재고/실적 없음 (BOM 만 있음)' ).
+      value = '완제품 BOM 요소 - 재고/실적 없음 ' && '(BOM 만 있음)' ).
     lo_alv->display( ).
   ENDMETHOD.
 ENDCLASS.
