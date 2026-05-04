@@ -124,8 +124,7 @@ CLASS lcl_app IMPLEMENTATION.
         ls_row1-labst = 0.
       ENDIF.
       DATA(lv_has_move) = abap_false.
-      READ TABLE lt_move_mats WITH KEY table_line = lv_matnr
-        TRANSPORTING NO FIELDS.
+      READ TABLE lt_move_mats WITH KEY table_line = lv_matnr TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_has_move = abap_true.
       ENDIF.
@@ -223,8 +222,7 @@ CLASS lcl_app IMPLEMENTATION.
     DATA ls_row2 TYPE ty_row2.
     LOOP AT lt_fert_comp INTO DATA(ls_fcomp).
       DATA(lv_comp) = ls_fcomp-matnr_comp.
-      READ TABLE lt_comp_move WITH KEY table_line = lv_comp
-        TRANSPORTING NO FIELDS.
+      READ TABLE lt_comp_move WITH KEY table_line = lv_comp TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         CONTINUE.
       ENDIF.
