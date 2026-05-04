@@ -12,7 +12,7 @@ CLASS lcl_app DEFINITION FINAL.
              mtart    TYPE mara-mtart,
              meins    TYPE mara-meins,
              maktx    TYPE makt-maktx,
-             category TYPE char30,
+             category TYPE c LENGTH 30,
            END OF ty_result.
     TYPES ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
     TYPES ty_t_matnr  TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
@@ -28,8 +28,10 @@ CLASS lcl_app IMPLEMENTATION.
     DATA ls_res         TYPE ty_result.
 
     IF s_budat[] IS INITIAL.
-      DATA(lv_from) = sy-datum - 30.
-      DATA(lv_to)   = sy-datum.
+      DATA lv_from TYPE sy-datum.
+      DATA lv_to   TYPE sy-datum.
+      lv_from = sy-datum - 30.
+      lv_to   = sy-datum.
       APPEND VALUE #( sign = 'I' option = 'BT' low = lv_from high = lv_to ) TO s_budat.
     ENDIF.
 
@@ -38,14 +40,14 @@ CLASS lcl_app IMPLEMENTATION.
       INNER JOIN mkpf AS h
         ON h~mblnr = s~mblnr
        AND h~mjahr = s~mjahr
-      WHERE s~werks = @p_werks
-        AND h~budat IN @s_budat
+     WHERE s~werks = @p_werks
+       AND h~budat IN @s_budat
       INTO TABLE @lt_mat_mov.
 
     SELECT DISTINCT d~matnr
       FROM mard AS d
-      WHERE d~werks = @p_werks
-        AND d~labst > 0
+     WHERE d~werks = @p_werks
+       AND d~labst > 0
       INTO TABLE @lt_mat_stock.
 
     SELECT DISTINCT stpo~idnrk
@@ -54,8 +56,8 @@ CLASS lcl_app IMPLEMENTATION.
         ON mh~matnr = m~matnr
       INNER JOIN stpo AS stpo
         ON stpo~stlnr = m~stlnr
-      WHERE m~werks = @p_werks
-        AND mh~mtart = 'FERT'
+     WHERE m~werks = @p_werks
+       AND mh~mtart = 'FERT'
       INTO TABLE @lt_mat_bomcomp.
 
     LOOP AT lt_mat_mov INTO DATA(lv_matnr_a).
@@ -92,14 +94,14 @@ CLASS lcl_app IMPLEMENTATION.
       SELECT a~matnr, a~mtart, a~meins
         FROM mara AS a
         FOR ALL ENTRIES IN @lt_all_mat
-        WHERE a~matnr = @lt_all_mat-table_line
+       WHERE a~matnr = @lt_all_mat-table_line
         INTO TABLE @DATA(lt_mara).
 
       SELECT t~matnr, t~maktx
         FROM makt AS t
         FOR ALL ENTRIES IN @lt_all_mat
-        WHERE t~matnr = @lt_all_mat-table_line
-          AND t~spras = @sy-langu
+       WHERE t~matnr = @lt_all_mat-table_line
+         AND t~spras = @sy-langu
         INTO TABLE @DATA(lt_makt).
 
       SORT lt_mara BY matnr.
@@ -107,13 +109,13 @@ CLASS lcl_app IMPLEMENTATION.
 
       LOOP AT lt_final INTO ls_res.
         READ TABLE lt_mara INTO DATA(ls_mara)
-          WITH KEY matnr = ls_res-matnr BINARY SEARCH.
+             WITH KEY matnr = ls_res-matnr BINARY SEARCH.
         IF sy-subrc = 0.
           ls_res-mtart = ls_mara-mtart.
           ls_res-meins = ls_mara-meins.
         ENDIF.
         READ TABLE lt_makt INTO DATA(ls_makt)
-          WITH KEY matnr = ls_res-matnr BINARY SEARCH.
+             WITH KEY matnr = ls_res-matnr BINARY SEARCH.
         IF sy-subrc = 0.
           ls_res-maktx = ls_makt-maktx.
         ENDIF.
