@@ -1,7 +1,7 @@
 REPORT ZAI_260504_1505.
 
 PARAMETERS p_werks TYPE werks_d OBLIGATORY.
-SELECT-OPTIONS s_budat TYPE budat NO-EXTENSION.
+SELECT-OPTIONS s_budat FOR matdoc-budat_mkpf NO-EXTENSION.
 
 CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
@@ -86,11 +86,11 @@ CLASS lcl_app IMPLEMENTATION.
 
     " Helper for quick lookups
     DATA lt_stock_by_mat TYPE HASHED TABLE OF ty_stock
-                          WITH UNIQUE KEY matnr werks.
+      WITH UNIQUE KEY matnr werks.
     lt_stock_by_mat = lt_stock.
 
     DATA lt_mov_set TYPE HASHED TABLE OF mara-matnr
-                     WITH UNIQUE KEY table_line.
+      WITH UNIQUE KEY table_line.
     lt_mov_set = lt_mov_matnr.
 
     " 5) Build main result
@@ -104,7 +104,7 @@ CLASS lcl_app IMPLEMENTATION.
 
       DATA(lv_status) = CONV char20( '' ).
       READ TABLE lt_mov_set WITH TABLE KEY table_line = <ls_mat>-matnr
-           TRANSPORTING NO FIELDS.
+        TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_status = '입출고 있음'.
       ELSE.
@@ -152,7 +152,7 @@ CLASS lcl_app IMPLEMENTATION.
     " Exclude materials already in main list (movement or stock)
     IF lt_bom_comp IS NOT INITIAL.
       DATA lt_main_set TYPE HASHED TABLE OF mara-matnr
-                        WITH UNIQUE KEY table_line.
+        WITH UNIQUE KEY table_line.
       LOOP AT lt_main ASSIGNING FIELD-SYMBOL(<ls_main_mat>).
         INSERT <ls_main_mat>-matnr INTO TABLE lt_main_set.
       ENDLOOP.
@@ -160,7 +160,7 @@ CLASS lcl_app IMPLEMENTATION.
       DATA lt_bom_only_mat TYPE ty_t_matnr.
       LOOP AT lt_bom_comp ASSIGNING FIELD-SYMBOL(<lv_comp>).
         READ TABLE lt_main_set WITH TABLE KEY table_line = <lv_comp>
-             TRANSPORTING NO FIELDS.
+          TRANSPORTING NO FIELDS.
         IF sy-subrc <> 0.
           INSERT <lv_comp> INTO TABLE lt_bom_only_mat.
         ENDIF.
