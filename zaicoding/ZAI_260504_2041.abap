@@ -80,8 +80,7 @@ CLASS lcl_app IMPLEMENTATION.
        AND mkpf~mjahr = mseg~mjahr
       INTO TABLE @lt_move
       WHERE mkpf~budat IN @s_budat
-        AND mseg~werks IN @s_werks
-        AND mseg~matnr IS NOT NULL.
+        AND mseg~werks IN @s_werks.
 
 *   Current non-zero stock per material and plant
     SELECT
@@ -98,11 +97,15 @@ CLASS lcl_app IMPLEMENTATION.
 
 *   Build union key set (matnr, werks)
     LOOP AT lt_move INTO DATA(ls_move).
-      INSERT VALUE ty_key( matnr = ls_move-matnr werks = ls_move-werks ) INTO TABLE lt_keys.
+      INSERT VALUE ty_key(
+        matnr = ls_move-matnr
+        werks = ls_move-werks ) INTO TABLE lt_keys.
     ENDLOOP.
 
     LOOP AT lt_stock INTO DATA(ls_stock).
-      INSERT VALUE ty_key( matnr = ls_stock-matnr werks = ls_stock-werks ) INTO TABLE lt_keys.
+      INSERT VALUE ty_key(
+        matnr = ls_stock-matnr
+        werks = ls_stock-werks ) INTO TABLE lt_keys.
     ENDLOOP.
 
     lt_keys_std = CORRESPONDING ty_t_key_std( lt_keys ).
@@ -132,7 +135,9 @@ CLASS lcl_app IMPLEMENTATION.
 
 *   Build final result
     LOOP AT lt_keys_std INTO ls_key.
-      DATA(ls_res) = VALUE ty_result( matnr = ls_key-matnr werks = ls_key-werks ).
+      DATA(ls_res) = VALUE ty_result(
+        matnr = ls_key-matnr
+        werks = ls_key-werks ).
 
 *     Material master/text
       READ TABLE lt_mat WITH TABLE KEY matnr = ls_key-matnr INTO DATA(ls_mat).
@@ -143,7 +148,9 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
 
 *     Stock qty if any
-      READ TABLE lt_stock_h WITH TABLE KEY matnr = ls_key-matnr werks = ls_key-werks INTO DATA(ls_stk).
+      READ TABLE lt_stock_h
+        WITH TABLE KEY matnr = ls_key-matnr werks = ls_key-werks
+        INTO DATA(ls_stk).
       IF sy-subrc = 0.
         ls_res-qty = ls_stk-qty.
       ELSE.
@@ -152,7 +159,9 @@ CLASS lcl_app IMPLEMENTATION.
 
 *     Status
       DATA(lv_has_move) = abap_false.
-      READ TABLE lt_move WITH KEY matnr = ls_key-matnr werks = ls_key-werks TRANSPORTING NO FIELDS.
+      READ TABLE lt_move
+        WITH KEY matnr = ls_key-matnr werks = ls_key-werks
+        TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_has_move = abap_true.
       ENDIF.
