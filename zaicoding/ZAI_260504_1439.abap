@@ -60,14 +60,12 @@ CLASS lcl_app IMPLEMENTATION.
       lv_to   = lv_tmp.
     ENDIF.
 
-    " 1) Materials with movement in period at plant (MATDOC)
     SELECT DISTINCT matdoc~matnr
       FROM matdoc
       WHERE matdoc~werks = @p_werks
-        AND matdoc~budat_mkpf BETWEEN @lv_from AND @lv_to
+        AND matdoc~budat BETWEEN @lv_from AND @lv_to
       INTO TABLE @lt_mv_matnr.
 
-    " 2) Materials with non-zero current stock at plant (MARD)
     SELECT mard~matnr, SUM( mard~labst ) AS qty
       FROM mard
       WHERE mard~werks = @p_werks
@@ -75,7 +73,6 @@ CLASS lcl_app IMPLEMENTATION.
       HAVING SUM( mard~labst ) <> 0
       INTO TABLE @lt_stock.
 
-    " 3) Union of movement list and stock list
     lt_all_matnr = lt_mv_matnr.
     LOOP AT lt_stock INTO ls_stock.
       APPEND ls_stock-matnr TO lt_all_matnr.
@@ -83,7 +80,6 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_all_matnr BY table_line.
     DELETE ADJACENT DUPLICATES FROM lt_all_matnr COMPARING table_line.
 
-    " 4) Basic material data for candidates
     IF lt_all_matnr IS NOT INITIAL.
       SELECT mara~matnr, mara~mtart, mara~meins
         FROM mara
@@ -92,7 +88,6 @@ CLASS lcl_app IMPLEMENTATION.
       SORT lt_mara BY matnr.
     ENDIF.
 
-    " 5) Build MAIN section rows
     LOOP AT lt_all_matnr INTO DATA(lv_matnr).
       CLEAR ls_out.
       ls_out-section = 'MAIN'.
@@ -128,7 +123,6 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_out TO lt_out.
     ENDLOOP.
 
-    " 6) BOM: Finished products with BOM at plant
     SELECT DISTINCT mast~matnr
       FROM mast
       INNER JOIN mara ON mara~matnr = mast~matnr
@@ -138,7 +132,6 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_bom_fert BY table_line.
     DELETE ADJACENT DUPLICATES FROM lt_bom_fert COMPARING table_line.
 
-    " 7) BOM components used at plant (distinct component materials)
     SELECT DISTINCT stpo~idnrk
       FROM mast
       INNER JOIN stpo ON stpo~stlnr = mast~stlnr
@@ -148,7 +141,6 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_bom_comp BY table_line.
     DELETE ADJACENT DUPLICATES FROM lt_bom_comp COMPARING table_line.
 
-    " Enrich MARA for BOM headers/components if missing
     DATA lt_bom_all TYPE ty_t_matnr.
     lt_bom_all = lt_bom_fert.
     APPEND LINES OF lt_bom_comp TO lt_bom_all.
@@ -164,7 +156,6 @@ CLASS lcl_app IMPLEMENTATION.
       SORT lt_mara_bom BY matnr.
     ENDIF.
 
-    " 8) Add BOM section rows for FERT with BOM
     LOOP AT lt_bom_fert INTO lv_matnr.
       CLEAR ls_out.
       ls_out-section = 'BOM'.
@@ -187,16 +178,10 @@ CLASS lcl_app IMPLEMENTATION.
       READ TABLE lt_mv_matnr WITH KEY table_line = lv_matnr TRANSPORTING NO FIELDS.
       ls_out-has_mvmt = COND abap_bool( WHEN sy-subrc = 0 THEN abap_true ELSE abap_false ).
 
-      IF ls_out-has_mvmt = abap_true OR ls_out-stock_qty <> 0.
-        ls_out-status = 'BOM 보유'.
-      ELSE.
-        ls_out-status = 'BOM 보유'.
-      ENDIF.
-
+      ls_out-status = 'BOM 보유'.
       APPEND ls_out TO lt_out.
     ENDLOOP.
 
-    " 9) Add BOM-only component rows: no movement and no stock
     LOOP AT lt_bom_comp INTO lv_matnr.
       READ TABLE lt_stock WITH KEY matnr = lv_matnr TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
@@ -224,7 +209,6 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_out TO lt_out.
     ENDLOOP.
 
-    " 10) Display ALV
     DATA lo_alv TYPE REF TO cl_salv_table.
     cl_salv_table=>factory(
       IMPORTING
