@@ -39,32 +39,32 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_out1 TYPE ty_t_row1.
     DATA lt_out2 TYPE ty_t_row2.
 
-    " 1) Materials with movements in period for plant
+    " Materials with movements in period for plant
     SELECT DISTINCT
       ms~matnr
       FROM mseg AS ms
       INNER JOIN mkpf AS mk
         ON mk~mblnr = ms~mblnr
        AND mk~mjahr = ms~mjahr
-      WHERE ms~werks = @p_werks
-        AND mk~budat BETWEEN @p_begda AND @p_endda
+     WHERE ms~werks = @p_werks
+       AND mk~budat BETWEEN @p_begda AND @p_endda
       INTO TABLE @lt_move_mats.
 
-    " 2) Materials with current stock <> 0 in plant
+    " Materials with current stock <> 0 in plant
     SELECT DISTINCT
       md~matnr
       FROM mard AS md
-      WHERE md~werks = @p_werks
-        AND md~labst <> 0
+     WHERE md~werks = @p_werks
+       AND md~labst <> 0
       INTO TABLE @lt_stock_mats.
 
-    " 3) Union of both sets
+    " Union of both sets
     lt_all_mats = lt_move_mats.
     APPEND LINES OF lt_stock_mats TO lt_all_mats.
     SORT lt_all_mats BY table_line.
     DELETE ADJACENT DUPLICATES FROM lt_all_mats.
 
-    " 4) Read master data for all materials
+    " Master data for all materials
     TYPES: BEGIN OF ty_mdat,
              matnr TYPE mara-matnr,
              mtart TYPE mara-mtart,
@@ -83,12 +83,12 @@ CLASS lcl_app IMPLEMENTATION.
         LEFT OUTER JOIN makt AS mt
           ON mt~matnr = ma~matnr
          AND mt~spras = @sy-langu
-        FOR ALL ENTRIES IN @lt_all_mats
-        WHERE ma~matnr = @lt_all_mats-table_line
+       FOR ALL ENTRIES IN @lt_all_mats
+       WHERE ma~matnr = @lt_all_mats-table_line
         INTO TABLE @lt_mdat.
     ENDIF.
 
-    " 5) Stock quantities per material in plant
+    " Stock quantities per material in plant
     TYPES: BEGIN OF ty_stock,
              matnr TYPE mara-matnr,
              labst TYPE mard-labst,
@@ -100,13 +100,13 @@ CLASS lcl_app IMPLEMENTATION.
       SELECT md~matnr,
              SUM( md~labst ) AS labst
         FROM mard AS md
-        WHERE md~werks = @p_werks
-          AND md~matnr IN @lt_all_mats
-        GROUP BY md~matnr
+       WHERE md~werks = @p_werks
+         AND md~matnr IN @lt_all_mats
+       GROUP BY md~matnr
         INTO TABLE @lt_stock.
     ENDIF.
 
-    " 6) Build first output list with status
+    " Build first output list with status
     DATA ls_row1 TYPE ty_row1.
     LOOP AT lt_all_mats INTO DATA(lv_matnr).
       CLEAR ls_row1.
@@ -140,7 +140,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     SORT lt_out1 BY matnr.
 
-    " 7) BOM-based section
+    " BOM-based section
     TYPES: BEGIN OF ty_fert_hdr,
              matnr TYPE mara-matnr,
            END OF ty_fert_hdr.
@@ -152,8 +152,8 @@ CLASS lcl_app IMPLEMENTATION.
       FROM mast AS ma
       INNER JOIN mara AS mr
         ON mr~matnr = ma~matnr
-      WHERE ma~werks = @p_werks
-        AND mr~mtart = 'FERT'
+     WHERE ma~werks = @p_werks
+       AND mr~mtart = 'FERT'
       INTO TABLE @lt_fert_hdr.
 
     DATA lt_comp_mat TYPE ty_matnr_tab.
@@ -166,8 +166,8 @@ CLASS lcl_app IMPLEMENTATION.
           ON sp~stlty = ma~stlty
          AND sp~stlnr = ma~stlnr
          AND sp~stlal = ma~stlal
-        FOR ALL ENTRIES IN @lt_fert_hdr
-        WHERE ma~matnr = @lt_fert_hdr-matnr
+       FOR ALL ENTRIES IN @lt_fert_hdr
+       WHERE ma~matnr = @lt_fert_hdr-matnr
         INTO TABLE @DATA(lt_fert_comp).
 
       IF lt_fert_comp IS NOT INITIAL.
@@ -184,9 +184,9 @@ CLASS lcl_app IMPLEMENTATION.
       SELECT md~matnr,
              SUM( md~labst ) AS labst
         FROM mard AS md
-        WHERE md~werks = @p_werks
-          AND md~matnr IN @lt_comp_mat
-        GROUP BY md~matnr
+       WHERE md~werks = @p_werks
+         AND md~matnr IN @lt_comp_mat
+       GROUP BY md~matnr
         INTO TABLE @lt_comp_stock.
     ENDIF.
 
@@ -198,9 +198,9 @@ CLASS lcl_app IMPLEMENTATION.
         INNER JOIN mkpf AS mk
           ON mk~mblnr = ms~mblnr
          AND mk~mjahr = ms~mjahr
-        WHERE ms~werks = @p_werks
-          AND mk~budat BETWEEN @p_begda AND @p_endda
-          AND ms~matnr IN @lt_comp_mat
+       WHERE ms~werks = @p_werks
+         AND mk~budat BETWEEN @p_begda AND @p_endda
+         AND ms~matnr IN @lt_comp_mat
         INTO TABLE @lt_comp_move.
     ENDIF.
 
@@ -214,33 +214,35 @@ CLASS lcl_app IMPLEMENTATION.
         LEFT OUTER JOIN makt AS mt
           ON mt~matnr = ma~matnr
          AND mt~spras = @sy-langu
-        FOR ALL ENTRIES IN @lt_comp_mat
-        WHERE ma~matnr = @lt_comp_mat-table_line
+       FOR ALL ENTRIES IN @lt_comp_mat
+       WHERE ma~matnr = @lt_comp_mat-table_line
         INTO TABLE @lt_comp_mdat.
     ENDIF.
 
     DATA ls_row2 TYPE ty_row2.
-    LOOP AT lt_fert_comp INTO DATA(ls_fcomp).
-      DATA(lv_comp) = ls_fcomp-matnr_comp.
-      READ TABLE lt_comp_move WITH KEY table_line = lv_comp TRANSPORTING NO FIELDS.
-      IF sy-subrc = 0.
-        CONTINUE.
-      ENDIF.
-      READ TABLE lt_comp_stock INTO ls_stk WITH KEY matnr = lv_comp.
-      IF sy-subrc = 0 AND ls_stk-labst <> 0.
-        CONTINUE.
-      ENDIF.
-      CLEAR ls_row2.
-      ls_row2-matnr_fert = ls_fcomp-matnr_fert.
-      ls_row2-matnr_comp = lv_comp.
-      READ TABLE lt_comp_mdat INTO ls_mdat WITH KEY matnr = lv_comp.
-      IF sy-subrc = 0.
-        ls_row2-comp_maktx = ls_mdat-maktx.
-        ls_row2-meins      = ls_mdat-meins.
-      ENDIF.
-      ls_row2-status = 'BOM 만 있음'.
-      APPEND ls_row2 TO lt_out2.
-    ENDLOOP.
+    IF lt_fert_hdr IS NOT INITIAL AND lt_comp_mat IS NOT INITIAL.
+      LOOP AT lt_fert_comp INTO DATA(ls_fcomp).
+        DATA(lv_comp) = ls_fcomp-matnr_comp.
+        READ TABLE lt_comp_move WITH KEY table_line = lv_comp TRANSPORTING NO FIELDS.
+        IF sy-subrc = 0.
+          CONTINUE.
+        ENDIF.
+        READ TABLE lt_comp_stock INTO ls_stk WITH KEY matnr = lv_comp.
+        IF sy-subrc = 0 AND ls_stk-labst <> 0.
+          CONTINUE.
+        ENDIF.
+        CLEAR ls_row2.
+        ls_row2-matnr_fert = ls_fcomp-matnr_fert.
+        ls_row2-matnr_comp = lv_comp.
+        READ TABLE lt_comp_mdat INTO ls_mdat WITH KEY matnr = lv_comp.
+        IF sy-subrc = 0.
+          ls_row2-comp_maktx = ls_mdat-maktx.
+          ls_row2-meins      = ls_mdat-meins.
+        ENDIF.
+        ls_row2-status = 'BOM 만 있음'.
+        APPEND ls_row2 TO lt_out2.
+      ENDLOOP.
+    ENDIF.
 
     SORT lt_out2 BY matnr_fert matnr_comp.
 
