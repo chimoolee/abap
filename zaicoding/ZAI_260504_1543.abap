@@ -8,7 +8,7 @@ CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
     CLASS-METHODS run.
   PRIVATE SECTION.
-    TYPES: ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    TYPES ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
     TYPES: BEGIN OF ty_stock,
              matnr TYPE mara-matnr,
@@ -105,7 +105,6 @@ CLASS lcl_app IMPLEMENTATION.
     lt_mov = get_mov_mat( i_werks = p_werks i_begda = p_begda i_endda = p_endda ).
     lt_stock = get_stock_by_mat( i_werks = p_werks ).
 
-    " Build union list of materials from movements and stock
     lt_all = lt_mov.
     DATA ls_stock TYPE ty_stock.
     LOOP AT lt_stock INTO ls_stock.
@@ -128,7 +127,6 @@ CLASS lcl_app IMPLEMENTATION.
       lo_alv->display( ).
     ENDIF.
 
-    " BOM-only section for finished goods
     lt_pairs = get_bom_pairs_for_fert( i_werks = p_werks ).
     IF lt_pairs IS NOT INITIAL.
       lt_bom = build_bom_only( it_pairs = lt_pairs it_mov = lt_mov it_stock = lt_stock ).
@@ -139,7 +137,7 @@ CLASS lcl_app IMPLEMENTATION.
           CHANGING
             t_table      = lt_bom ).
         lo_alv->get_display_settings( )->set_list_header(
-          value = |플랜트 { p_werks } BOM 요소 목록 (재고/입출고 없음: "BOM 만 있음")| ).
+          value = |플랜트 { p_werks } BOM 요소 목록| && | ("BOM 만 있음")| ).
         lo_alv->display( ).
       ENDIF.
     ENDIF.
@@ -195,7 +193,7 @@ CLASS lcl_app IMPLEMENTATION.
           ls_main  TYPE ty_main,
           ls_stock TYPE ty_stock.
 
-    DATA lt_mov_s TYPE ty_t_matnr.
+    DATA lt_mov_s   TYPE ty_t_matnr.
     DATA lt_stock_s TYPE ty_t_stock.
     lt_mov_s = it_mov.
     lt_stock_s = it_stock.
@@ -217,8 +215,8 @@ CLASS lcl_app IMPLEMENTATION.
 
       DATA lv_in_mov TYPE abap_bool.
       lv_in_mov = abap_false.
-      READ TABLE lt_mov_s WITH KEY table_line = ls_mm-matnr TRANSPORTING NO FIELDS
-           BINARY SEARCH.
+      READ TABLE lt_mov_s WITH KEY table_line = ls_mm-matnr
+           TRANSPORTING NO FIELDS BINARY SEARCH.
       IF sy-subrc = 0.
         lv_in_mov = abap_true.
       ENDIF.
@@ -240,7 +238,6 @@ CLASS lcl_app IMPLEMENTATION.
 
   METHOD get_bom_pairs_for_fert.
     DATA lt_pairs TYPE ty_t_bom_pair.
-    " Headers: FERT with BOM in plant
     SELECT stko~matnr AS header,
            stpo~idnrk AS comp
       FROM stko
@@ -249,7 +246,7 @@ CLASS lcl_app IMPLEMENTATION.
       INNER JOIN mara
         ON mara~matnr = stko~matnr
       WHERE stko~werks = @i_werks
-        AND mara~mtart = @'FERT'
+        AND mara~mtart = 'FERT'
       INTO TABLE @lt_pairs.
     DELETE ADJACENT DUPLICATES FROM lt_pairs COMPARING header comp.
     rt_pairs = lt_pairs.
@@ -257,14 +254,13 @@ CLASS lcl_app IMPLEMENTATION.
 
   METHOD build_bom_only.
     DATA lt_bom TYPE ty_t_bom_only.
-    DATA lt_mov_s TYPE ty_t_matnr.
+    DATA lt_mov_s   TYPE ty_t_matnr.
     DATA lt_stock_s TYPE ty_t_stock.
     lt_mov_s = it_mov.
     lt_stock_s = it_stock.
     SORT lt_mov_s.
     SORT lt_stock_s BY matnr.
 
-    " Collect unique component and header matnrs for text retrieval
     DATA lt_comp TYPE ty_t_matnr.
     DATA lt_head TYPE ty_t_matnr.
     DATA ls_pair TYPE ty_bom_pair.
@@ -277,7 +273,6 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_head.
     DELETE ADJACENT DUPLICATES FROM lt_head.
 
-    " Fetch texts
     DATA lt_comp_mm TYPE ty_t_mm.
     DATA lt_head_mm TYPE ty_t_mm.
     IF lt_comp IS NOT INITIAL.
@@ -289,12 +284,12 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_comp_mm BY matnr.
     SORT lt_head_mm BY matnr.
 
-    DATA ls_bom TYPE ty_bom_only.
+    DATA ls_bom   TYPE ty_bom_only.
     DATA ls_stock TYPE ty_stock.
-    DATA ls_cmm TYPE ty_mm.
-    DATA ls_hmm TYPE ty_mm.
+    DATA ls_cmm   TYPE ty_mm.
+    DATA ls_hmm   TYPE ty_mm.
+
     LOOP AT it_pairs INTO ls_pair.
-      " Skip component if it has movement or non-zero stock
       READ TABLE lt_mov_s WITH KEY table_line = ls_pair-comp
            TRANSPORTING NO FIELDS BINARY SEARCH.
       IF sy-subrc = 0.
@@ -308,4 +303,27 @@ CLASS lcl_app IMPLEMENTATION.
 
       CLEAR ls_bom.
       ls_bom-comp_matnr = ls_pair-comp.
-      READ TABLE lt_comp_mm
+      READ TABLE lt_comp_mm INTO ls_cmm WITH KEY matnr = ls_pair-comp
+           BINARY SEARCH.
+      IF sy-subrc = 0.
+        ls_bom-comp_text = ls_cmm-maktx.
+      ENDIF.
+
+      ls_bom-header_matnr = ls_pair-header.
+      READ TABLE lt_head_mm INTO ls_hmm WITH KEY matnr = ls_pair-header
+           BINARY SEARCH.
+      IF sy-subrc = 0.
+        ls_bom-header_text = ls_hmm-maktx.
+      ENDIF.
+
+      ls_bom-remark = 'BOM 만 있음'.
+      APPEND ls_bom TO lt_bom.
+    ENDLOOP.
+
+    SORT lt_bom BY header_matnr comp_matnr.
+    rt_bom = lt_bom.
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  lcl_app=>run( ).
