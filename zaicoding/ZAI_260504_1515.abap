@@ -29,8 +29,8 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_move_matnr TYPE ty_t_matnr.
     SELECT DISTINCT matdoc~matnr
       FROM matdoc AS matdoc
-      WHERE matdoc~werks      = @p_werks
-        AND matdoc~budat_mkpf BETWEEN @lv_from AND @lv_to
+      WHERE matdoc~werks = @p_werks
+        AND matdoc~budat BETWEEN @lv_from AND @lv_to
       INTO TABLE @lt_move_matnr.
 
     " Current stock <> 0 by material at plant
