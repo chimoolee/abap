@@ -14,7 +14,7 @@ TYPES:
     matnr TYPE mara-matnr,
     werks TYPE mseg-werks,
   END OF ty_move,
-  ty_t_move TYPE STANDARD TABLE OF ty_move WITH EMPTY KEY,
+  ty_t_move   TYPE STANDARD TABLE OF ty_move WITH EMPTY KEY,
   ty_t_move_h TYPE HASHED TABLE OF ty_move WITH UNIQUE KEY matnr werks.
 
 TYPES:
@@ -23,7 +23,7 @@ TYPES:
     werks TYPE mseg-werks,
     labst TYPE mard-labst,
   END OF ty_stock,
-  ty_t_stock TYPE STANDARD TABLE OF ty_stock WITH EMPTY KEY,
+  ty_t_stock   TYPE STANDARD TABLE OF ty_stock WITH EMPTY KEY,
   ty_t_stock_h TYPE HASHED TABLE OF ty_stock WITH UNIQUE KEY matnr werks.
 
 TYPES:
@@ -33,7 +33,7 @@ TYPES:
     matkl TYPE mara-matkl,
     maktx TYPE makt-maktx,
   END OF ty_mm,
-  ty_t_mm TYPE STANDARD TABLE OF ty_mm WITH EMPTY KEY,
+  ty_t_mm   TYPE STANDARD TABLE OF ty_mm WITH EMPTY KEY,
   ty_t_mm_h TYPE HASHED TABLE OF ty_mm WITH UNIQUE KEY matnr.
 
 TYPES:
