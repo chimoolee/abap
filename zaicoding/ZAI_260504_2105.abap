@@ -1,5 +1,7 @@
 REPORT ZAI_260504_2105.
 
+TABLES mara.
+
 SELECT-OPTIONS:
   s_budat FOR mkpf-budat,
   s_werks FOR mseg-werks.
