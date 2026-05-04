@@ -15,24 +15,22 @@ CLASS lcl_app IMPLEMENTATION.
 
     TYPES:
       ty_matnr_tab TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY,
-      ty_row1 TYPE STRUCTURE
-        BEGIN OF ty_row1,
-          matnr TYPE mara-matnr,
-          mtart TYPE mara-mtart,
-          meins TYPE mara-meins,
-          maktx TYPE makt-maktx,
-          labst TYPE mard-labst,
-          status TYPE char20,
-        END OF ty_row1,
+      BEGIN OF ty_row1,
+        matnr  TYPE mara-matnr,
+        mtart  TYPE mara-mtart,
+        meins  TYPE mara-meins,
+        maktx  TYPE makt-maktx,
+        labst  TYPE mard-labst,
+        status TYPE c LENGTH 20,
+      END OF ty_row1,
       ty_t_row1 TYPE STANDARD TABLE OF ty_row1 WITH EMPTY KEY,
-      ty_row2 TYPE STRUCTURE
-        BEGIN OF ty_row2,
-          matnr_fert TYPE mara-matnr,
-          matnr_comp TYPE mara-matnr,
-          comp_maktx TYPE makt-maktx,
-          meins      TYPE mara-meins,
-          status     TYPE char20,
-        END OF ty_row2,
+      BEGIN OF ty_row2,
+        matnr_fert TYPE mara-matnr,
+        matnr_comp TYPE mara-matnr,
+        comp_maktx TYPE makt-maktx,
+        meins      TYPE mara-meins,
+        status     TYPE c LENGTH 20,
+      END OF ty_row2,
       ty_t_row2 TYPE STANDARD TABLE OF ty_row2 WITH EMPTY KEY.
 
     DATA lt_move_mats TYPE ty_matnr_tab.
@@ -43,7 +41,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     " 1) Materials with movements in period for plant
     SELECT DISTINCT
-           ms~matnr
+      ms~matnr
       FROM mseg AS ms
       INNER JOIN mkpf AS mk
         ON mk~mblnr = ms~mblnr
@@ -54,7 +52,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     " 2) Materials with current stock <> 0 in plant
     SELECT DISTINCT
-           md~matnr
+      md~matnr
       FROM mard AS md
       WHERE md~werks = @p_werks
         AND md~labst <> 0
@@ -126,7 +124,8 @@ CLASS lcl_app IMPLEMENTATION.
         ls_row1-labst = 0.
       ENDIF.
       DATA(lv_has_move) = abap_false.
-      READ TABLE lt_move_mats WITH KEY table_line = lv_matnr TRANSPORTING NO FIELDS.
+      READ TABLE lt_move_mats WITH KEY table_line = lv_matnr
+        TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_has_move = abap_true.
       ENDIF.
@@ -135,7 +134,6 @@ CLASS lcl_app IMPLEMENTATION.
       ELSEIF ls_row1-labst <> 0.
         ls_row1-status = '재고만 있음'.
       ELSE.
-        " Should not happen as list is union, keep fallback
         ls_row1-status = '상태 없음'.
       ENDIF.
       APPEND ls_row1 TO lt_out1.
@@ -143,17 +141,15 @@ CLASS lcl_app IMPLEMENTATION.
 
     SORT lt_out1 BY matnr.
 
-    " 7) BOM-based section: components for FERT headers in plant
-    "    Include only components that have no movement and zero stock -> 'BOM 만 있음'
+    " 7) BOM-based section
     TYPES: BEGIN OF ty_fert_hdr,
              matnr TYPE mara-matnr,
            END OF ty_fert_hdr.
     TYPES ty_t_fert_hdr TYPE STANDARD TABLE OF ty_fert_hdr WITH EMPTY KEY.
     DATA lt_fert_hdr TYPE ty_t_fert_hdr.
 
-    " Find FERT headers in plant via MAST
     SELECT DISTINCT
-           ma~matnr
+      ma~matnr
       FROM mast AS ma
       INNER JOIN mara AS mr
         ON mr~matnr = ma~matnr
@@ -161,12 +157,11 @@ CLASS lcl_app IMPLEMENTATION.
         AND mr~mtart = 'FERT'
       INTO TABLE @lt_fert_hdr.
 
-    " Components from STPO via MAST
     DATA lt_comp_mat TYPE ty_matnr_tab.
     IF lt_fert_hdr IS NOT INITIAL.
       SELECT DISTINCT
-             ma~matnr AS matnr_fert,
-             sp~idnrk  AS matnr_comp
+        ma~matnr AS matnr_fert,
+        sp~idnrk  AS matnr_comp
         FROM mast AS ma
         INNER JOIN stpo AS sp
           ON sp~stlty = ma~stlty
@@ -175,6 +170,7 @@ CLASS lcl_app IMPLEMENTATION.
         FOR ALL ENTRIES IN @lt_fert_hdr
         WHERE ma~matnr = @lt_fert_hdr-matnr
         INTO TABLE @DATA(lt_fert_comp).
+
       IF lt_fert_comp IS NOT INITIAL.
         LOOP AT lt_fert_comp INTO DATA(ls_fc).
           APPEND ls_fc-matnr_comp TO lt_comp_mat.
@@ -184,7 +180,6 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
     ENDIF.
 
-    " Determine which components have stock or movement
     DATA lt_comp_stock TYPE ty_t_stock.
     IF lt_comp_mat IS NOT INITIAL.
       SELECT md~matnr,
@@ -199,7 +194,7 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_comp_move TYPE ty_matnr_tab.
     IF lt_comp_mat IS NOT INITIAL.
       SELECT DISTINCT
-             ms~matnr
+        ms~matnr
         FROM mseg AS ms
         INNER JOIN mkpf AS mk
           ON mk~mblnr = ms~mblnr
@@ -210,7 +205,6 @@ CLASS lcl_app IMPLEMENTATION.
         INTO TABLE @lt_comp_move.
     ENDIF.
 
-    " Texts and UoM for components
     DATA lt_comp_mdat TYPE ty_t_mdat.
     IF lt_comp_mat IS NOT INITIAL.
       SELECT ma~matnr,
@@ -226,12 +220,11 @@ CLASS lcl_app IMPLEMENTATION.
         INTO TABLE @lt_comp_mdat.
     ENDIF.
 
-    " Build second output list
     DATA ls_row2 TYPE ty_row2.
     LOOP AT lt_fert_comp INTO DATA(ls_fcomp).
-      " Include only when comp has no movement and zero stock
       DATA(lv_comp) = ls_fcomp-matnr_comp.
-      READ TABLE lt_comp_move WITH KEY table_line = lv_comp TRANSPORTING NO FIELDS.
+      READ TABLE lt_comp_move WITH KEY table_line = lv_comp
+        TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         CONTINUE.
       ENDIF.
@@ -253,7 +246,6 @@ CLASS lcl_app IMPLEMENTATION.
 
     SORT lt_out2 BY matnr_fert matnr_comp.
 
-    " Display Section 1
     IF lt_out1 IS INITIAL AND lt_out2 IS INITIAL.
       WRITE: / '선택한 조건에 해당하는 데이터가 없습니다.'.
       RETURN.
@@ -267,7 +259,6 @@ CLASS lcl_app IMPLEMENTATION.
         t_table      = lt_out1 ).
     lo_alv->display( ).
 
-    " Display Section 2
     IF lt_out2 IS NOT INITIAL.
       WRITE: / '섹션 2: FERT BOM 구성품 - 입출고 및 재고 없음( BOM 만 있음 )'.
       cl_salv_table=>factory(
