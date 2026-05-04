@@ -37,7 +37,7 @@ CLASS lcl_app IMPLEMENTATION.
              meins  TYPE mara-meins,
              maktx  TYPE makt-maktx,
              stock  TYPE mard-labst,
-             status TYPE char20,
+             status TYPE c LENGTH 20,
            END OF ty_res.
     TYPES ty_t_res TYPE STANDARD TABLE OF ty_res WITH EMPTY KEY.
 
@@ -49,14 +49,17 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_bom_only   TYPE ty_t_res.
     DATA lo_alv        TYPE REF TO cl_salv_table.
 
-    " 1) Materials with movements in period (MATDOC)
+    " 1) Materials with movements in period (MKPF/MSEG)
     SELECT DISTINCT
-           md~matnr
-      FROM matdoc AS md
-      WHERE md~werks       = @p_werks
-        AND md~budat_mkpf >= @p_datfr
-        AND md~budat_mkpf <= @p_datto
-        AND md~matnr       <> ''
+      mseg~matnr
+      FROM mseg AS mseg
+      INNER JOIN mkpf AS mkpf
+        ON mkpf~mblnr = mseg~mblnr
+       AND mkpf~mjahr = mseg~mjahr
+      WHERE mseg~werks = @p_werks
+        AND mkpf~budat >= @p_datfr
+        AND mkpf~budat <= @p_datto
+        AND mseg~matnr <> ''
       INTO TABLE @lt_move_matnr.
 
     " 2) Materials with current stock > 0 at plant (MARD)
@@ -105,7 +108,7 @@ CLASS lcl_app IMPLEMENTATION.
     LOOP AT lt_attr ASSIGNING FIELD-SYMBOL(<ls_attr>).
       DATA(lv_stock_qty) = CONV mard-labst( 0 ).
       READ TABLE lt_stock_by_matnr ASSIGNING FIELD-SYMBOL(<ls_stk_by>)
-           WITH TABLE KEY matnr = <ls_attr>-matnr.
+        WITH TABLE KEY matnr = <ls_attr>-matnr.
       IF sy-subrc = 0.
         lv_stock_qty = <ls_stk_by>-qty.
       ENDIF.
@@ -113,18 +116,16 @@ CLASS lcl_app IMPLEMENTATION.
       DATA(lv_has_move) = xsdbool( line_exists( lt_move_set[ table_line = <ls_attr>-matnr ] ) ).
 
       DATA(ls_res) = VALUE ty_res(
-          matnr  = <ls_attr>-matnr
-          werks  = p_werks
-          mtart  = <ls_attr>-mtart
-          matkl  = <ls_attr>-matkl
-          meins  = <ls_attr>-meins
-          maktx  = <ls_attr>-maktx
-          stock  = lv_stock_qty
-          status = COND char20(
-                      WHEN lv_has_move = abap_true THEN '입출고 있음'
-                      WHEN lv_stock_qty > 0         THEN '재고만 있음'
-                      ELSE '' ) ).
-      " Only include those with move or stock as requested
+                        matnr  = <ls_attr>-matnr
+                        werks  = p_werks
+                        mtart  = <ls_attr>-mtart
+                        matkl  = <ls_attr>-matkl
+                        meins  = <ls_attr>-meins
+                        maktx  = <ls_attr>-maktx
+                        stock  = lv_stock_qty
+                        status = COND #( WHEN lv_has_move = abap_true THEN '입출고 있음'
+                                         WHEN lv_stock_qty > 0         THEN '재고만 있음'
+                                         ELSE '' ) ).
       IF ls_res-status IS NOT INITIAL.
         APPEND ls_res TO lt_main.
       ENDIF.
@@ -146,7 +147,7 @@ CLASS lcl_app IMPLEMENTATION.
     IF lt_fert_hdr IS NOT INITIAL.
       DATA lt_comp TYPE ty_matnr_tab.
       SELECT DISTINCT
-             stpo~idnrk
+        stpo~idnrk
         FROM stpo AS stpo
         INNER JOIN mast AS mast
           ON stpo~stlnr = mast~stlnr
@@ -158,15 +159,12 @@ CLASS lcl_app IMPLEMENTATION.
         INTO TABLE @lt_comp.
 
       IF lt_comp IS NOT INITIAL.
-        " Remove those already in main set (have stock or movement)
         SORT lt_comp.
         DELETE ADJACENT DUPLICATES FROM lt_comp.
 
-        " Build a set of already shown materials
         DATA lt_shown TYPE HASHED TABLE OF mara-matnr WITH UNIQUE KEY table_line.
         lt_shown = lt_all_matnr.
 
-        " Keep only BOM components not in shown set
         DATA lt_bom_only_matnr TYPE ty_matnr_tab.
         LOOP AT lt_comp ASSIGNING FIELD-SYMBOL(<lv_c>).
           IF NOT line_exists( lt_shown[ table_line = <lv_c> ] ).
