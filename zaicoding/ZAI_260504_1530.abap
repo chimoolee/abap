@@ -14,16 +14,16 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lo_alv TYPE REF TO cl_salv_table.
 
     TYPES: BEGIN OF ty_main,
-             matnr TYPE mara-matnr,
-             maktx TYPE makt-maktx,
-             mtart TYPE mara-mtart,
-             matkl TYPE mara-matkl,
-             meins TYPE mara-meins,
-             qty   TYPE mard-labst,
-             status TYPE char20,
+             matnr  TYPE mara-matnr,
+             maktx  TYPE makt-maktx,
+             mtart  TYPE mara-mtart,
+             matkl  TYPE mara-matkl,
+             meins  TYPE mara-meins,
+             qty    TYPE mard-labst,
+             status TYPE c LENGTH 20,
            END OF ty_main.
-
     TYPES ty_t_main TYPE STANDARD TABLE OF ty_main WITH EMPTY KEY.
+
     DATA lt_main TYPE ty_t_main.
     DATA lt_bom  TYPE ty_t_main.
 
@@ -58,11 +58,14 @@ CLASS lcl_app IMPLEMENTATION.
     TYPES ty_t_makt TYPE STANDARD TABLE OF ty_makt WITH EMPTY KEY.
     DATA lt_makt TYPE ty_t_makt.
 
-    DATA lv_today TYPE sy-datum VALUE sy-datum.
+    DATA lv_today TYPE sy-datum.
+    lv_today = sy-datum.
 
     IF p_datf IS INITIAL AND p_datt IS INITIAL.
+      DATA(lv_from) = lv_today.
+      lv_from = lv_from - 30.
+      p_datf = lv_from.
       p_datt = lv_today.
-      p_datf = lv_today - 30.
     ENDIF.
 
     IF p_datf GT p_datt.
@@ -76,19 +79,18 @@ CLASS lcl_app IMPLEMENTATION.
       INNER JOIN mkpf AS k
         ON k~mblnr = m~mblnr
        AND k~mjahr = m~mjahr
-      WHERE m~werks = @p_werks
-        AND k~budat BETWEEN @p_datf AND @p_datt
+     WHERE m~werks = @p_werks
+       AND k~budat BETWEEN @p_datf AND @p_datt
       INTO TABLE @lt_mov_matnr.
 
     SELECT mard~matnr,
            SUM( mard~labst ) AS qty
       FROM mard
-      WHERE mard~werks = @p_werks
-      GROUP BY mard~matnr
-      HAVING SUM( mard~labst ) <> 0
+     WHERE mard~werks = @p_werks
+     GROUP BY mard~matnr
+    HAVING SUM( mard~labst ) <> 0
       INTO TABLE @lt_stock.
 
-    " Build union of materials with movement or non-zero stock
     lt_all_mats = lt_mov_matnr.
     LOOP AT lt_stock ASSIGNING FIELD-SYMBOL(<s>).
       APPEND <s>-matnr TO lt_all_mats.
@@ -96,26 +98,24 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_all_mats.
     DELETE ADJACENT DUPLICATES FROM lt_all_mats.
 
-    " Fetch material basic data
     IF lt_all_mats IS NOT INITIAL.
       SELECT mara~matnr,
              mara~mtart,
              mara~matkl,
              mara~meins
         FROM mara
-        WHERE mara~matnr IN @lt_all_mats
+       WHERE mara~matnr IN @lt_all_mats
         INTO TABLE @lt_mara.
 
       SELECT makt~matnr,
              makt~maktx
         FROM makt
-        WHERE makt~matnr IN @lt_all_mats
-          AND makt~spras = @sy-langu
+       WHERE makt~matnr IN @lt_all_mats
+         AND makt~spras = @sy-langu
         INTO TABLE @lt_makt.
       SORT lt_makt BY matnr.
     ENDIF.
 
-    " Build main list: with movement or with stock>0
     SORT lt_stock BY matnr.
     SORT lt_mov_matnr.
     LOOP AT lt_all_mats ASSIGNING FIELD-SYMBOL(<mat>).
@@ -139,7 +139,7 @@ CLASS lcl_app IMPLEMENTATION.
         lv_has_mov = abap_true.
       ENDIF.
 
-      DATA(lv_status) = | |.
+      DATA(lv_status) = ||.
       IF lv_has_mov = abap_true.
         lv_status = |입출고 있음|.
       ELSE.
@@ -154,22 +154,21 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
 
       APPEND VALUE ty_main(
-               matnr  = <ma>-matnr
-               maktx  = lv_maktx
-               mtart  = <ma>-mtart
-               matkl  = <ma>-matkl
-               meins  = <ma>-meins
-               qty    = lv_qty
-               status = lv_status ) TO lt_main.
+        matnr  = <ma>-matnr
+        maktx  = lv_maktx
+        mtart  = <ma>-mtart
+        matkl  = <ma>-matkl
+        meins  = <ma>-meins
+        qty    = lv_qty
+        status = lv_status ) TO lt_main.
     ENDLOOP.
 
-    " BOM candidates in plant: FERT headers and their components
     SELECT DISTINCT mast~matnr
       FROM mast AS mast
       INNER JOIN mara AS ma
         ON ma~matnr = mast~matnr
-      WHERE mast~werks = @p_werks
-        AND ma~mtart = 'FERT'
+     WHERE mast~werks = @p_werks
+       AND ma~mtart = 'FERT'
       INTO TABLE @lt_bom_fert.
 
     IF lt_bom_fert IS NOT INITIAL.
@@ -177,7 +176,7 @@ CLASS lcl_app IMPLEMENTATION.
         FROM stpo AS stpo
         INNER JOIN mast AS mast
           ON stpo~stlnr = mast~stlnr
-        WHERE mast~werks = @p_werks
+       WHERE mast~werks = @p_werks
         INTO TABLE @lt_bom_comp.
     ENDIF.
 
@@ -186,7 +185,6 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_bom_cand.
     DELETE ADJACENT DUPLICATES FROM lt_bom_cand.
 
-    " BOM-only = candidates not in main material set
     SORT lt_all_mats.
     LOOP AT lt_bom_cand ASSIGNING FIELD-SYMBOL(<bmat>).
       READ TABLE lt_all_mats WITH KEY table_line = <bmat>
@@ -205,37 +203,36 @@ CLASS lcl_app IMPLEMENTATION.
              mara~matkl,
              mara~meins
         FROM mara
-        WHERE mara~matnr IN @lt_bom_only
+       WHERE mara~matnr IN @lt_bom_only
         INTO TABLE @lt_bom_mara.
 
       SELECT makt~matnr,
              makt~maktx
         FROM makt
-        WHERE makt~matnr IN @lt_bom_only
-          AND makt~spras = @sy-langu
+       WHERE makt~matnr IN @lt_bom_only
+         AND makt~spras = @sy-langu
         INTO TABLE @lt_bom_makt.
       SORT lt_bom_makt BY matnr.
 
       LOOP AT lt_bom_mara ASSIGNING <ma>.
-        lv_maktx = ||.
+        DATA(lv_bm_maktx) = ||.
         READ TABLE lt_bom_makt ASSIGNING <mk>
           WITH KEY matnr = <ma>-matnr BINARY SEARCH.
         IF sy-subrc = 0.
-          lv_maktx = <mk>-maktx.
+          lv_bm_maktx = <mk>-maktx.
         ENDIF.
 
         APPEND VALUE ty_main(
-                 matnr  = <ma>-matnr
-                 maktx  = lv_maktx
-                 mtart  = <ma>-mtart
-                 matkl  = <ma>-matkl
-                 meins  = <ma>-meins
-                 qty    = 0
-                 status = |BOM 만 있음| ) TO lt_bom.
+          matnr  = <ma>-matnr
+          maktx  = lv_bm_maktx
+          mtart  = <ma>-mtart
+          matkl  = <ma>-matkl
+          meins  = <ma>-meins
+          qty    = 0
+          status = |BOM 만 있음| ) TO lt_bom.
       ENDLOOP.
     ENDIF.
 
-    " Display main list
     IF lt_main IS INITIAL AND lt_bom IS INITIAL.
       WRITE: / '선택한 조건에 해당하는 자재가 없습니다.'.
       RETURN.
@@ -257,7 +254,6 @@ CLASS lcl_app IMPLEMENTATION.
       lo_alv->display( ).
     ENDIF.
 
-    " Display BOM-only section
     IF lt_bom IS NOT INITIAL.
       cl_salv_table=>factory(
         IMPORTING
