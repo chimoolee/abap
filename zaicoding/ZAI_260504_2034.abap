@@ -1,6 +1,7 @@
 REPORT ZAI_260504_2034.
 
 TABLES mara.
+TABLES t001w.
 
 SELECT-OPTIONS s_budat FOR sy-datum.
 SELECT-OPTIONS s_werks FOR t001w-werks.
