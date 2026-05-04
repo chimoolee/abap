@@ -77,7 +77,7 @@ CLASS lcl_app IMPLEMENTATION.
     lt_all = lt_mov.
     DATA ls_stock LIKE LINE OF lt_stock.
     LOOP AT lt_stock INTO ls_stock.
-      IF line_exists( lt_all[ table_line = ls_stock-matnr ] ) = abap_false.
+      IF NOT line_exists( lt_all[ table_line = ls_stock-matnr ] ).
         APPEND ls_stock-matnr TO lt_all.
       ENDIF.
     ENDLOOP.
@@ -186,7 +186,7 @@ CLASS lcl_app IMPLEMENTATION.
         INTO TABLE @lt_comp_all.
 
       LOOP AT lt_comp_all ASSIGNING FIELD-SYMBOL(<lv_comp>).
-        IF line_exists( lt_all[ table_line = <lv_comp> ] ) = abap_false.
+        IF NOT line_exists( lt_all[ table_line = <lv_comp> ] ).
           APPEND <lv_comp> TO lt_comp_only.
         ENDIF.
       ENDLOOP.
