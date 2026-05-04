@@ -109,17 +109,18 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_union.
     DELETE ADJACENT DUPLICATES FROM lt_union.
 
-    lt_bom_only = lt_bom_comp.
-    IF lt_union IS NOT INITIAL.
-      LOOP AT lt_bom_only ASSIGNING FIELD-SYMBOL(<m>).
-        READ TABLE lt_union WITH KEY table_line = <m> TRANSPORTING NO FIELDS.
-        IF sy-subrc = 0.
-          DELETE lt_bom_only INDEX sy-tabix.
+    DATA lt_bom_only_calc TYPE ty_t_matnr.
+    IF lt_bom_comp IS NOT INITIAL.
+      LOOP AT lt_bom_comp ASSIGNING FIELD-SYMBOL(<mcomp>).
+        READ TABLE lt_union WITH KEY table_line = <mcomp> TRANSPORTING NO FIELDS.
+        IF sy-subrc <> 0.
+          APPEND <mcomp> TO lt_bom_only_calc.
         ENDIF.
       ENDLOOP.
+      SORT lt_bom_only_calc.
+      DELETE ADJACENT DUPLICATES FROM lt_bom_only_calc.
     ENDIF.
-    SORT lt_bom_only.
-    DELETE ADJACENT DUPLICATES FROM lt_bom_only.
+    lt_bom_only = lt_bom_only_calc.
 
     DATA lt_main TYPE ty_t_matnr.
     lt_main = lt_union.
@@ -154,13 +155,13 @@ CLASS lcl_app IMPLEMENTATION.
   METHOD get_mvmt.
     DATA lt TYPE ty_t_matnr.
     SELECT DISTINCT
-      mseg~matnr
+           mseg~matnr
       FROM mseg
       INNER JOIN mkpf
         ON mkpf~mblnr = mseg~mblnr
        AND mkpf~mjahr = mseg~mjahr
-      WHERE mseg~werks = @i_werks
-        AND mkpf~budat BETWEEN @i_from AND @i_to
+     WHERE mseg~werks = @i_werks
+       AND mkpf~budat BETWEEN @i_from AND @i_to
       INTO TABLE @lt
       UP TO 100000 ROWS.
     rt_matnr = lt.
@@ -171,10 +172,10 @@ CLASS lcl_app IMPLEMENTATION.
   METHOD get_stock_nonzero.
     DATA lt TYPE ty_t_matnr.
     SELECT DISTINCT
-      mard~matnr
+           mard~matnr
       FROM mard
-      WHERE mard~werks = @i_werks
-        AND mard~labst > 0
+     WHERE mard~werks = @i_werks
+       AND mard~labst > 0
       INTO TABLE @lt
       UP TO 100000 ROWS.
     rt_matnr = lt.
@@ -189,12 +190,12 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
     SELECT
-      mard~matnr,
-      SUM( mard~labst ) AS qty
+           mard~matnr,
+           SUM( mard~labst ) AS qty
       FROM mard
-      WHERE mard~werks = @i_werks
-        AND mard~matnr IN @it_matnr
-      GROUP BY mard~matnr
+     WHERE mard~werks = @i_werks
+       AND mard~matnr IN @it_matnr
+     GROUP BY mard~matnr
       INTO TABLE @lt.
     rt_sum = lt.
   ENDMETHOD.
@@ -202,12 +203,12 @@ CLASS lcl_app IMPLEMENTATION.
   METHOD get_fg_with_bom.
     DATA lt TYPE ty_t_matnr.
     SELECT DISTINCT
-      mast~matnr
+           mast~matnr
       FROM mast
       INNER JOIN mara AS ma
         ON ma~matnr = mast~matnr
-      WHERE mast~werks = @i_werks
-        AND ma~mtart = 'FERT'
+     WHERE mast~werks = @i_werks
+       AND ma~mtart = 'FERT'
       INTO TABLE @lt
       UP TO 100000 ROWS.
     rt_matnr = lt.
@@ -218,14 +219,14 @@ CLASS lcl_app IMPLEMENTATION.
   METHOD get_bom_components.
     DATA lt TYPE ty_t_matnr.
     SELECT DISTINCT
-      stpo~idnrk
+           stpo~idnrk
       FROM mast
       INNER JOIN stko
         ON stko~stlnr = mast~stlnr
        AND stko~stlal = mast~stlal
       INNER JOIN stpo
         ON stpo~stlnr = stko~stlnr
-      WHERE mast~werks = @i_werks
+     WHERE mast~werks = @i_werks
       INTO TABLE @lt
       UP TO 100000 ROWS.
     rt_matnr = lt.
@@ -240,20 +241,20 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
     SELECT
-      makt~matnr,
-      makt~spras,
-      makt~maktx
+           makt~matnr,
+           makt~spras,
+           makt~maktx
       FROM makt
-      WHERE makt~matnr IN @it_matnr
-        AND makt~spras = @sy-langu
+     WHERE makt~matnr IN @it_matnr
+       AND makt~spras = @sy-langu
       INTO TABLE @lt.
     rt_texts = lt.
   ENDMETHOD.
 
   METHOD build_output.
-    DATA lt_all TYPE ty_t_matnr.
+    DATA lt_all   TYPE ty_t_matnr.
     DATA lt_texts TYPE ty_t_makt.
-    DATA lt_out TYPE ty_t_out.
+    DATA lt_out   TYPE ty_t_out.
 
     lt_all = it_mvmt.
     APPEND LINES OF it_stock TO lt_all.
