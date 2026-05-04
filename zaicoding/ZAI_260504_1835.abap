@@ -39,7 +39,7 @@ CLASS lcl_app IMPLEMENTATION.
         matkl  TYPE mara-matkl,
         maktx  TYPE makt-maktx,
         labst  TYPE mard-labst,
-        status TYPE char20,
+        status TYPE c LENGTH 20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
@@ -141,7 +141,7 @@ CLASS lcl_app IMPLEMENTATION.
         WITH KEY matnr = ls_key-matnr
         BINARY SEARCH.
 
-      DATA(lv_status) = CONV char20( '' ).
+      DATA(lv_status) TYPE c LENGTH 20.
       IF lv_has_move = abap_true.
         lv_status = '입출고 있음'.
       ELSE.
