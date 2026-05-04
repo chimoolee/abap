@@ -41,6 +41,7 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_info_main TYPE ty_t_mat_info.
     DATA lt_info_bom  TYPE ty_t_mat_info.
     DATA lt_display   TYPE ty_t_result.
+
     DATA ls_res       TYPE ty_result.
     DATA ls_stock     TYPE ty_stock_sum.
     DATA ls_info      TYPE ty_mat_info.
@@ -194,7 +195,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     lo_alv->get_columns( )->set_optimize( abap_true ).
     lo_alv->get_display_settings( )->set_list_header(
-      '자재 목록 - 메인(입출고/재고) 및 BOM 전용' ).
+      '자재 목록 - 메인(입출고/재고) 및 BOM 전용' && '' ).
     lo_alv->display( ).
   ENDMETHOD.
 ENDCLASS.
