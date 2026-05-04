@@ -38,34 +38,50 @@ CLASS lcl_app DEFINITION FINAL.
     TYPES ty_t_bomsec TYPE STANDARD TABLE OF ty_bomsec WITH EMPTY KEY.
 
     CLASS-METHODS get_movements
-      IMPORTING i_werks TYPE werks_d
-                i_begda TYPE sy-datum
-                i_endda TYPE sy-datum
-      RETURNING VALUE(rt_matnr) TYPE ty_t_matnr.
+      IMPORTING
+        i_werks TYPE werks_d
+        i_begda TYPE sy-datum
+        i_endda TYPE sy-datum
+      EXPORTING
+        et_matnr TYPE ty_t_matnr.
 
     CLASS-METHODS get_stocks
-      IMPORTING i_werks TYPE werks_d
-      RETURNING VALUE(rt_stock) TYPE ty_t_stock.
+      IMPORTING
+        i_werks TYPE werks_d
+      EXPORTING
+        et_stock TYPE ty_t_stock.
 
     CLASS-METHODS get_texts
-      IMPORTING it_matnr TYPE ty_t_matnr
-      RETURNING VALUE(rt_texts) TYPE STANDARD TABLE OF makt WITH EMPTY KEY.
+      IMPORTING
+        it_matnr TYPE ty_t_matnr
+      EXPORTING
+        et_texts TYPE STANDARD TABLE OF makt WITH EMPTY KEY.
 
     CLASS-METHODS fill_main
-      IMPORTING it_all   TYPE ty_t_matnr
-                it_mov   TYPE ty_t_matnr
-                it_stock TYPE ty_t_stock
-      RETURNING VALUE(rt_main) TYPE ty_t_main.
+      IMPORTING
+        it_all   TYPE ty_t_matnr
+        it_mov   TYPE ty_t_matnr
+        it_stock TYPE ty_t_stock
+      EXPORTING
+        et_main  TYPE ty_t_main.
 
     CLASS-METHODS build_bom_section
-      IMPORTING i_werks  TYPE werks_d
-                it_mov   TYPE ty_t_matnr
-                it_stock TYPE ty_t_stock
-      RETURNING VALUE(rt_bom) TYPE ty_t_bomsec.
+      IMPORTING
+        i_werks  TYPE werks_d
+        it_mov   TYPE ty_t_matnr
+        it_stock TYPE ty_t_stock
+      EXPORTING
+        et_bom   TYPE ty_t_bomsec.
 
-    CLASS-METHODS display_alv
-      IMPORTING it_tab  TYPE STANDARD TABLE
-                iv_title TYPE string.
+    CLASS-METHODS display_alv_main
+      IMPORTING
+        it_tab  TYPE ty_t_main
+        iv_title TYPE string.
+
+    CLASS-METHODS display_alv_bom
+      IMPORTING
+        it_tab  TYPE ty_t_bomsec
+        iv_title TYPE string.
 ENDCLASS.
 
 CLASS lcl_app IMPLEMENTATION.
@@ -76,19 +92,23 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_main  TYPE ty_t_main.
     DATA lt_bom   TYPE ty_t_bomsec.
 
-    lt_mov   = get_movements( i_werks = p_werks i_begda = p_begda i_endda = p_endda ).
-    lt_stock = get_stocks( i_werks = p_werks ).
+    get_movements( EXPORTING i_werks = p_werks i_begda = p_begda i_endda = p_endda
+                   IMPORTING et_matnr = lt_mov ).
+    get_stocks( EXPORTING i_werks = p_werks
+                IMPORTING et_stock = lt_stock ).
 
     lt_all = lt_mov.
     LOOP AT lt_stock ASSIGNING FIELD-SYMBOL(<ls_stk>).
       INSERT <ls_stk>-matnr INTO TABLE lt_all.
     ENDLOOP.
 
-    lt_main = fill_main( it_all = lt_all it_mov = lt_mov it_stock = lt_stock ).
-    lt_bom  = build_bom_section( i_werks = p_werks it_mov = lt_mov it_stock = lt_stock ).
+    fill_main( EXPORTING it_all = lt_all it_mov = lt_mov it_stock = lt_stock
+               IMPORTING et_main = lt_main ).
+    build_bom_section( EXPORTING i_werks = p_werks it_mov = lt_mov it_stock = lt_stock
+                       IMPORTING et_bom = lt_bom ).
 
-    display_alv( it_tab = lt_main iv_title = |자재 목록 (입출고/재고)| ).
-    display_alv( it_tab = lt_bom  iv_title = |BOM 관련 섹션 (완제품 BOM, BOM 만 있음)| ).
+    display_alv_main( it_tab = lt_main iv_title = |자재 목록 (입출고/재고)| ).
+    display_alv_bom(  it_tab = lt_bom  iv_title = |BOM 관련 섹션 (완제품 BOM, BOM 만 있음)| ).
   ENDMETHOD.
 
   METHOD get_movements.
@@ -98,7 +118,7 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE md~werks       = @i_werks
         AND md~pstng_date >= @i_begda
         AND md~pstng_date <= @i_endda
-      INTO TABLE @rt_matnr.
+      INTO TABLE @et_matnr.
   ENDMETHOD.
 
   METHOD get_stocks.
@@ -108,12 +128,13 @@ CLASS lcl_app IMPLEMENTATION.
       FROM mard AS m
       WHERE m~werks = @i_werks
         AND m~labst <> 0
-      INTO TABLE @rt_stock.
+      INTO TABLE @et_stock.
   ENDMETHOD.
 
   METHOD get_texts.
     DATA lt_texts TYPE STANDARD TABLE OF makt WITH EMPTY KEY.
     IF it_matnr IS INITIAL.
+      CLEAR et_texts.
       RETURN.
     ENDIF.
 
@@ -126,7 +147,8 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE t~matnr = @it_matnr-table_line
         AND t~spras = @sy-langu
       INTO TABLE @lt_texts.
-    rt_texts = lt_texts.
+
+    et_texts = lt_texts.
   ENDMETHOD.
 
   METHOD fill_main.
@@ -135,6 +157,7 @@ CLASS lcl_app IMPLEMENTATION.
     DATA ls_main  TYPE ty_main.
 
     IF it_all IS INITIAL.
+      CLEAR et_main.
       RETURN.
     ENDIF.
 
@@ -148,7 +171,8 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE a~matnr = @it_all-table_line
       INTO TABLE @lt_mara.
 
-    lt_texts = get_texts( it_matnr = it_all ).
+    get_texts( EXPORTING it_matnr = it_all
+               IMPORTING et_texts = lt_texts ).
 
     LOOP AT lt_mara ASSIGNING FIELD-SYMBOL(<la>).
       CLEAR ls_main.
@@ -179,7 +203,7 @@ CLASS lcl_app IMPLEMENTATION.
         ls_main-status = |재고만 있음|.
       ENDIF.
 
-      APPEND ls_main TO rt_main.
+      APPEND ls_main TO et_main.
     ENDLOOP.
   ENDMETHOD.
 
@@ -226,6 +250,7 @@ CLASS lcl_app IMPLEMENTATION.
       INSERT <lc2> INTO TABLE lt_all_bom.
     ENDLOOP.
     IF lt_all_bom IS INITIAL.
+      CLEAR et_bom.
       RETURN.
     ENDIF.
 
@@ -239,7 +264,8 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE a~matnr = @lt_all_bom-table_line
       INTO TABLE @lt_mara.
 
-    lt_texts = get_texts( it_matnr = lt_all_bom ).
+    get_texts( EXPORTING it_matnr = lt_all_bom
+               IMPORTING et_texts = lt_texts ).
 
     LOOP AT lt_fert_bom ASSIGNING FIELD-SYMBOL(<lfb>).
       CLEAR ls_bom.
@@ -256,7 +282,7 @@ CLASS lcl_app IMPLEMENTATION.
         ls_bom-maktx = <ltx2>-maktx.
       ENDIF.
       ls_bom-status = |완제품 BOM|.
-      APPEND ls_bom TO rt_bom.
+      APPEND ls_bom TO et_bom.
     ENDLOOP.
 
     LOOP AT lt_comp_filtered ASSIGNING FIELD-SYMBOL(<lcf>).
@@ -274,11 +300,29 @@ CLASS lcl_app IMPLEMENTATION.
         ls_bom-maktx = <ltx2>-maktx.
       ENDIF.
       ls_bom-status = |BOM 만 있음|.
-      APPEND ls_bom TO rt_bom.
+      APPEND ls_bom TO et_bom.
     ENDLOOP.
   ENDMETHOD.
 
-  METHOD display_alv.
+  METHOD display_alv_main.
+    DATA lo_alv TYPE REF TO cl_salv_table.
+    TRY.
+        cl_salv_table=>factory(
+          IMPORTING
+            r_salv_table = lo_alv
+          CHANGING
+            t_table      = it_tab ).
+        lo_alv->get_display_settings( )->set_striped_pattern( abap_true ).
+        lo_alv->get_functions( )->set_all( abap_true ).
+        lo_alv->get_columns( )->set_optimize( abap_true ).
+        lo_alv->get_selections( )->set_selection_mode( if_salv_c_selection_mode=>single ).
+        lo_alv->get_display_settings( )->set_list_header( iv_title ).
+        lo_alv->display( ).
+      CATCH cx_salv_msg.
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD display_alv_bom.
     DATA lo_alv TYPE REF TO cl_salv_table.
     TRY.
         cl_salv_table=>factory(
