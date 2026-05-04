@@ -54,44 +54,75 @@ CLASS lcl_app IMPLEMENTATION.
     DATA ls_key     TYPE ty_key.
     DATA ls_det     TYPE ty_matdet.
     DATA ls_res     TYPE ty_result.
-    DATA lv_found   TYPE abap_bool.
     DATA lv_stock   TYPE mard-labst.
     DATA lo_alv     TYPE REF TO cl_salv_table.
 
-    " Movement keys (MSEG + MKPF with MKPF~BUDAT)
-    IF s_budat IS INITIAL AND s_werks IS INITIAL.
+* Movement keys (MSEG + MKPF with MKPF~BUDAT)
+    IF s_budat IS INITIAL AND s_werks IS INITIAL AND s_matnr IS INITIAL.
       SELECT DISTINCT
-             mseg~matnr,
-             mseg~werks
+        mseg~matnr,
+        mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
          AND mkpf~mjahr = mseg~mjahr
         INTO TABLE @lt_mov.
-    ELSEIF s_budat IS INITIAL AND s_werks IS NOT INITIAL.
+    ELSEIF s_budat IS INITIAL AND s_werks IS INITIAL AND s_matnr IS NOT INITIAL.
       SELECT DISTINCT
-             mseg~matnr,
-             mseg~werks
+        mseg~matnr,
+        mseg~werks
+        FROM mseg
+        INNER JOIN mkpf
+          ON mkpf~mblnr = mseg~mblnr
+         AND mkpf~mjahr = mseg~mjahr
+        WHERE mseg~matnr IN @s_matnr
+        INTO TABLE @lt_mov.
+    ELSEIF s_budat IS INITIAL AND s_werks IS NOT INITIAL AND s_matnr IS INITIAL.
+      SELECT DISTINCT
+        mseg~matnr,
+        mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
          AND mkpf~mjahr = mseg~mjahr
         WHERE mseg~werks IN @s_werks
         INTO TABLE @lt_mov.
-    ELSEIF s_budat IS NOT INITIAL AND s_werks IS INITIAL.
+    ELSEIF s_budat IS INITIAL AND s_werks IS NOT INITIAL AND s_matnr IS NOT INITIAL.
       SELECT DISTINCT
-             mseg~matnr,
-             mseg~werks
+        mseg~matnr,
+        mseg~werks
+        FROM mseg
+        INNER JOIN mkpf
+          ON mkpf~mblnr = mseg~mblnr
+         AND mkpf~mjahr = mseg~mjahr
+        WHERE mseg~werks IN @s_werks
+          AND mseg~matnr IN @s_matnr
+        INTO TABLE @lt_mov.
+    ELSEIF s_budat IS NOT INITIAL AND s_werks IS INITIAL AND s_matnr IS INITIAL.
+      SELECT DISTINCT
+        mseg~matnr,
+        mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
          AND mkpf~mjahr = mseg~mjahr
         WHERE mkpf~budat IN @s_budat
         INTO TABLE @lt_mov.
-    ELSE.
+    ELSEIF s_budat IS NOT INITIAL AND s_werks IS INITIAL AND s_matnr IS NOT INITIAL.
       SELECT DISTINCT
-             mseg~matnr,
-             mseg~werks
+        mseg~matnr,
+        mseg~werks
+        FROM mseg
+        INNER JOIN mkpf
+          ON mkpf~mblnr = mseg~mblnr
+         AND mkpf~mjahr = mseg~mjahr
+        WHERE mkpf~budat IN @s_budat
+          AND mseg~matnr IN @s_matnr
+        INTO TABLE @lt_mov.
+    ELSEIF s_budat IS NOT INITIAL AND s_werks IS NOT INITIAL AND s_matnr IS INITIAL.
+      SELECT DISTINCT
+        mseg~matnr,
+        mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
@@ -99,29 +130,64 @@ CLASS lcl_app IMPLEMENTATION.
         WHERE mkpf~budat IN @s_budat
           AND mseg~werks IN @s_werks
         INTO TABLE @lt_mov.
+    ELSE.
+      SELECT DISTINCT
+        mseg~matnr,
+        mseg~werks
+        FROM mseg
+        INNER JOIN mkpf
+          ON mkpf~mblnr = mseg~mblnr
+         AND mkpf~mjahr = mseg~mjahr
+        WHERE mkpf~budat IN @s_budat
+          AND mseg~werks IN @s_werks
+          AND mseg~matnr IN @s_matnr
+        INTO TABLE @lt_mov.
     ENDIF.
 
-    " Current stock per material/plant (MARD) where total <> 0
-    IF s_werks IS INITIAL.
-      SELECT matnr,
-             werks,
-             SUM( labst ) AS qty
+* Current stock per material/plant (MARD) where total <> 0
+    IF s_werks IS INITIAL AND s_matnr IS INITIAL.
+      SELECT
+        matnr,
+        werks,
+        SUM( labst ) AS qty
         FROM mard
         GROUP BY matnr, werks
         HAVING SUM( labst ) <> 0
         INTO TABLE @lt_stk.
-    ELSE.
-      SELECT matnr,
-             werks,
-             SUM( labst ) AS qty
+    ELSEIF s_werks IS INITIAL AND s_matnr IS NOT INITIAL.
+      SELECT
+        matnr,
+        werks,
+        SUM( labst ) AS qty
+        FROM mard
+        WHERE matnr IN @s_matnr
+        GROUP BY matnr, werks
+        HAVING SUM( labst ) <> 0
+        INTO TABLE @lt_stk.
+    ELSEIF s_werks IS NOT INITIAL AND s_matnr IS INITIAL.
+      SELECT
+        matnr,
+        werks,
+        SUM( labst ) AS qty
         FROM mard
         WHERE werks IN @s_werks
         GROUP BY matnr, werks
         HAVING SUM( labst ) <> 0
         INTO TABLE @lt_stk.
+    ELSE.
+      SELECT
+        matnr,
+        werks,
+        SUM( labst ) AS qty
+        FROM mard
+        WHERE werks IN @s_werks
+          AND matnr IN @s_matnr
+        GROUP BY matnr, werks
+        HAVING SUM( labst ) <> 0
+        INTO TABLE @lt_stk.
     ENDIF.
 
-    " Build union of keys from movements and stock
+* Build union of keys from movements and stock
     lt_keys = lt_mov.
     lt_tmp  = VALUE ty_t_key(
                 FOR ls IN lt_stk
@@ -129,29 +195,30 @@ CLASS lcl_app IMPLEMENTATION.
                   werks = ls-werks ) ).
     LOOP AT lt_tmp ASSIGNING FIELD-SYMBOL(<lk>).
       READ TABLE lt_keys WITH KEY matnr = <lk>-matnr
-                                  werks = <lk>-werks
-                       TRANSPORTING NO FIELDS.
+                                 werks = <lk>-werks
+           TRANSPORTING NO FIELDS.
       IF sy-subrc <> 0.
         APPEND <lk> TO lt_keys.
       ENDIF.
     ENDLOOP.
 
-    " Apply optional material filter from s_matnr
+* Apply material filter from s_matnr (safety, if not already applied)
     IF s_matnr IS NOT INITIAL.
       DELETE lt_keys WHERE NOT ( matnr IN s_matnr ).
     ENDIF.
 
-    " Prepare material list for details
+* Prepare material list for details
     lt_matnr = VALUE #( FOR k IN lt_keys ( k-matnr ) ).
     SORT lt_matnr BY table_line.
     DELETE ADJACENT DUPLICATES FROM lt_matnr COMPARING table_line.
 
-    " Read material details with text
+* Read material details with text
     IF lt_matnr IS NOT INITIAL.
-      SELECT mara~matnr,
-             mara~mtart,
-             mara~matkl,
-             makt~maktx
+      SELECT
+        mara~matnr,
+        mara~mtart,
+        mara~matkl,
+        makt~maktx
         FROM mara
         LEFT JOIN makt
           ON makt~matnr = mara~matnr
@@ -160,27 +227,15 @@ CLASS lcl_app IMPLEMENTATION.
         WHERE mara~matnr IN @lt_matnr.
     ENDIF.
 
-    " Build result with status and stock qty
+* Build result with status and stock qty
     LOOP AT lt_keys INTO ls_key.
-      CLEAR: ls_res, lv_stock, lv_found.
+      CLEAR ls_res.
       ls_res-matnr = ls_key-matnr.
       ls_res-werks = ls_key-werks.
 
-      " Map details
+* Map details
       READ TABLE lt_det INTO ls_det WITH KEY matnr = ls_key-matnr.
       IF sy-subrc = 0.
         ls_res-mtart = ls_det-mtart.
         ls_res-matkl = ls_det-matkl.
-        ls_res-maktx = ls_det-maktx.
-      ENDIF.
-
-      " Stock quantity if any
-      READ TABLE lt_stk WITH KEY matnr = ls_key-matnr
-                                werks = ls_key-werks
-                        INTO DATA(ls_stk).
-      IF sy-subrc = 0.
-        lv_stock = ls_stk-qty.
-      ELSE.
-        lv_stock = 0.
-      ENDIF.
-      ls_res-stock_qty = lv
+        ls_res-maktx = ls_det-makt
