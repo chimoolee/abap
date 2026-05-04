@@ -11,7 +11,7 @@ ENDCLASS.
 
 CLASS lcl_app IMPLEMENTATION.
   METHOD run.
-    TYPES: ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    TYPES ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
     TYPES: BEGIN OF ty_stock,
              matnr TYPE mara-matnr,
@@ -63,7 +63,7 @@ CLASS lcl_app IMPLEMENTATION.
     SELECT DISTINCT matdoc~matnr
       FROM matdoc
       WHERE matdoc~werks = @p_werks
-        AND matdoc~budat BETWEEN @lv_from AND @lv_to
+        AND matdoc~budat_mkpf BETWEEN @lv_from AND @lv_to
       INTO TABLE @lt_mv_matnr.
 
     SELECT mard~matnr, SUM( mard~labst ) AS qty
