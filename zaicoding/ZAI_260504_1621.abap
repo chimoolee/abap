@@ -1,7 +1,7 @@
 REPORT ZAI_260504_1621.
 
 PARAMETERS p_werks TYPE werks_d OBLIGATORY.
-SELECT-OPTIONS s_budat FOR mkpf-budat NO INTERVALS OBLIGATORY.
+SELECT-OPTIONS s_budat FOR sy-datum OBLIGATORY.
 
 CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
@@ -11,11 +11,13 @@ ENDCLASS.
 CLASS lcl_app IMPLEMENTATION.
   METHOD run.
     TYPES ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+
     TYPES: BEGIN OF ty_stock,
              matnr TYPE mara-matnr,
              labst TYPE mard-labst,
            END OF ty_stock.
     TYPES ty_t_stock TYPE STANDARD TABLE OF ty_stock WITH EMPTY KEY.
+
     TYPES: BEGIN OF ty_row,
              category  TYPE char20,
              matnr     TYPE mara-matnr,
@@ -42,15 +44,15 @@ CLASS lcl_app IMPLEMENTATION.
       INNER JOIN mkpf AS mkpf
         ON mkpf~mblnr = mseg~mblnr
        AND mkpf~mjahr = mseg~mjahr
-      WHERE mseg~werks = @p_werks
-        AND mkpf~budat IN @s_budat
+     WHERE mseg~werks = @p_werks
+       AND mkpf~budat IN @s_budat
       INTO TABLE @lt_mov_mat.
 
     " 2) Materials with current stock <> 0 in plant
     SELECT mard~matnr, mard~labst
       FROM mard AS mard
-      WHERE mard~werks = @p_werks
-        AND mard~labst <> 0
+     WHERE mard~werks = @p_werks
+       AND mard~labst <> 0
       INTO TABLE @lt_stock.
 
     " Derive stock material list
@@ -64,8 +66,8 @@ CLASS lcl_app IMPLEMENTATION.
       FROM mast AS mast
       INNER JOIN mara AS mara
         ON mara~matnr = mast~matnr
-      WHERE mast~werks = @p_werks
-        AND mara~mtart = 'FERT'
+     WHERE mast~werks = @p_werks
+       AND mara~mtart = 'FERT'
       INTO TABLE @lt_bom_fg.
 
     " 4) BOM component materials for BOMs assigned in plant
@@ -73,9 +75,9 @@ CLASS lcl_app IMPLEMENTATION.
       FROM mast AS mast
       INNER JOIN stpo AS stpo
         ON stpo~stlnr = mast~stlnr
-      WHERE mast~werks = @p_werks
-        AND stpo~idnrk IS NOT NULL
-        AND stpo~idnrk <> ''
+     WHERE mast~werks = @p_werks
+       AND stpo~idnrk IS NOT NULL
+       AND stpo~idnrk <> ''
       INTO TABLE @lt_bom_comp.
 
     " Build sets for fast lookup
@@ -90,9 +92,7 @@ CLASS lcl_app IMPLEMENTATION.
     lt_bom_cmp_set = lt_bom_comp.
 
     " Result: 1) Movement exists (category A)
-    DATA lv_exists TYPE abap_bool.
     DATA ls_row TYPE ty_row.
-
     DATA lv_stock_qty TYPE mard-labst.
     DATA lv_matnr TYPE mara-matnr.
 
@@ -101,7 +101,8 @@ CLASS lcl_app IMPLEMENTATION.
       ls_row-matnr = lv_matnr.
       ls_row-werks = p_werks.
       ls_row-category = '입출고실적있음'.
-      READ TABLE lt_bom_fg_set WITH TABLE KEY table_line = lv_matnr TRANSPORTING NO FIELDS.
+      READ TABLE lt_bom_fg_set WITH TABLE KEY table_line = lv_matnr
+           TRANSPORTING NO FIELDS.
       ls_row-fg_bom = xsdbool( sy-subrc = 0 ).
       READ TABLE lt_stock INTO ls_stock WITH KEY matnr = lv_matnr.
       IF sy-subrc = 0.
@@ -113,14 +114,16 @@ CLASS lcl_app IMPLEMENTATION.
 
     " 2) Stock only (no movement) (category B)
     LOOP AT lt_stock INTO ls_stock.
-      READ TABLE lt_mov_set WITH TABLE KEY table_line = ls_stock-matnr TRANSPORTING NO FIELDS.
+      READ TABLE lt_mov_set WITH TABLE KEY table_line = ls_stock-matnr
+           TRANSPORTING NO FIELDS.
       IF sy-subrc <> 0.
         CLEAR ls_row.
         ls_row-matnr = ls_stock-matnr.
         ls_row-werks = p_werks.
         ls_row-category = '재고만있음'.
         ls_row-stock_qty = ls_stock-labst.
-        READ TABLE lt_bom_fg_set WITH TABLE KEY table_line = ls_stock-matnr TRANSPORTING NO FIELDS.
+        READ TABLE lt_bom_fg_set WITH TABLE KEY table_line = ls_stock-matnr
+             TRANSPORTING NO FIELDS.
         ls_row-fg_bom = xsdbool( sy-subrc = 0 ).
         APPEND ls_row TO lt_result.
       ENDIF.
@@ -128,11 +131,13 @@ CLASS lcl_app IMPLEMENTATION.
 
     " 3) BOM only components (no movement, no stock) (category C)
     LOOP AT lt_bom_comp INTO lv_matnr.
-      READ TABLE lt_mov_set   WITH TABLE KEY table_line = lv_matnr TRANSPORTING NO FIELDS.
+      READ TABLE lt_mov_set WITH TABLE KEY table_line = lv_matnr
+           TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         CONTINUE.
       ENDIF.
-      READ TABLE lt_stock_set WITH TABLE KEY table_line = lv_matnr TRANSPORTING NO FIELDS.
+      READ TABLE lt_stock_set WITH TABLE KEY table_line = lv_matnr
+           TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         CONTINUE.
       ENDIF.
@@ -146,7 +151,6 @@ CLASS lcl_app IMPLEMENTATION.
     ENDLOOP.
 
     " Collect all materials for text fetch
-    DATA lt_tmp TYPE ty_t_matnr.
     LOOP AT lt_result INTO ls_row.
       APPEND ls_row-matnr TO lt_all_mat.
     ENDLOOP.
@@ -164,15 +168,16 @@ CLASS lcl_app IMPLEMENTATION.
     IF lt_all_mat IS NOT INITIAL.
       SELECT makt~matnr, makt~maktx
         FROM makt AS makt
-        WHERE makt~matnr IN @lt_all_mat
-          AND makt~spras = @sy-langu
+       WHERE makt~matnr IN @lt_all_mat
+         AND makt~spras = @sy-langu
         INTO TABLE @lt_makt.
     ENDIF.
 
     " Map texts
     SORT lt_makt BY matnr.
     LOOP AT lt_result INTO ls_row.
-      READ TABLE lt_makt INTO ls_makt WITH KEY matnr = ls_row-matnr BINARY SEARCH.
+      READ TABLE lt_makt INTO ls_makt WITH KEY matnr = ls_row-matnr
+           BINARY SEARCH.
       IF sy-subrc = 0.
         ls_row-maktx = ls_makt-maktx.
       ENDIF.
