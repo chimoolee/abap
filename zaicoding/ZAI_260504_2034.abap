@@ -1,6 +1,8 @@
 REPORT ZAI_260504_2034.
 
-SELECT-OPTIONS s_budat FOR mkpf-budat.
+TABLES mara.
+
+SELECT-OPTIONS s_budat FOR sy-datum.
 SELECT-OPTIONS s_werks FOR t001w-werks.
 
 CLASS lcl_app DEFINITION FINAL.
@@ -42,21 +44,21 @@ CLASS lcl_app IMPLEMENTATION.
         matkl     TYPE mara-matkl,
         maktx     TYPE makt-maktx,
         stock_qty TYPE mard-labst,
-        status    TYPE char20,
+        status    TYPE c LENGTH 20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
-    DATA lt_mov_keys   TYPE ty_t_key.
-    DATA lt_stock_agg  TYPE ty_t_stock_agg.
-    DATA lt_all_keys   TYPE ty_t_key.
-    DATA lt_attr       TYPE ty_t_attr.
-    DATA lt_result     TYPE ty_t_result.
-    DATA lt_matnr      TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_mov_keys  TYPE ty_t_key.
+    DATA lt_stock_agg TYPE ty_t_stock_agg.
+    DATA lt_all_keys  TYPE ty_t_key.
+    DATA lt_attr      TYPE ty_t_attr.
+    DATA lt_result    TYPE ty_t_result.
+    DATA lt_matnr     TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
     " Movement keys by MKPF/MSEG with posting date and plant filter
     SELECT DISTINCT
-           mseg~matnr,
-           mseg~werks
+      mseg~matnr,
+      mseg~werks
       FROM mseg
       INNER JOIN mkpf
         ON mkpf~mblnr = mseg~mblnr
@@ -75,7 +77,7 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE mard~werks IN @s_werks
       GROUP BY mard~matnr, mard~werks.
 
-    " Remove zero-qty entries from stock
+    " Keep only non-zero stock
     DELETE lt_stock_agg WHERE qty = 0.
 
     " Build union of keys: movements and non-zero stock
@@ -93,7 +95,7 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_matnr.
     DELETE ADJACENT DUPLICATES FROM lt_matnr.
 
-    " Fetch attributes from MARA/MAKT
+    " Fetch attributes from MARA/MAKT (language-dependent text)
     IF lt_matnr IS NOT INITIAL.
       SELECT
         mara~matnr,
@@ -115,4 +117,60 @@ CLASS lcl_app IMPLEMENTATION.
     " Build result with status and stock quantity
     LOOP AT lt_all_keys INTO ls_key.
       DATA(ls_res) = VALUE ty_result(
-        matnr = ls_key
+        matnr = ls_key-matnr
+        werks = ls_key-werks
+        mtart = VALUE mara-mtart( )
+        matkl = VALUE mara-matkl( )
+        maktx = VALUE makt-maktx( )
+        stock_qty = 0
+        status = '' ).
+
+      READ TABLE lt_attr INTO DATA(ls_attr)
+        WITH KEY matnr = ls_key-matnr
+        BINARY SEARCH.
+      IF sy-subrc = 0.
+        ls_res-mtart = ls_attr-mtart.
+        ls_res-matkl = ls_attr-matkl.
+        ls_res-maktx = ls_attr-maktx.
+      ENDIF.
+
+      DATA(lv_has_mov) = abap_false.
+      READ TABLE lt_mov_keys TRANSPORTING NO FIELDS
+        WITH KEY matnr = ls_key-matnr werks = ls_key-werks
+        BINARY SEARCH.
+      IF sy-subrc = 0.
+        lv_has_mov = abap_true.
+      ENDIF.
+
+      READ TABLE lt_stock_agg INTO DATA(ls_stk)
+        WITH KEY matnr = ls_key-matnr werks = ls_key-werks
+        BINARY SEARCH.
+      IF sy-subrc = 0.
+        ls_res-stock_qty = ls_stk-qty.
+      ENDIF.
+
+      IF lv_has_mov = abap_true AND ls_res-stock_qty > 0.
+        ls_res-status = '입출고/재고있음'.
+      ELSEIF lv_has_mov = abap_true AND ls_res-stock_qty = 0.
+        ls_res-status = '입출고만 있음'.
+      ELSEIF lv_has_mov = abap_false AND ls_res-stock_qty > 0.
+        ls_res-status = '재고만 있음'.
+      ENDIF.
+
+      APPEND ls_res TO lt_result.
+    ENDLOOP.
+
+    DATA lo_alv TYPE REF TO cl_salv_table.
+    cl_salv_table=>factory(
+      IMPORTING
+        r_salv_table = lo_alv
+      CHANGING
+        t_table      = lt_result ).
+
+    lo_alv->get_columns( )->set_optimize( abap_true ).
+    lo_alv->display( ).
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  lcl_app=>run( ).
