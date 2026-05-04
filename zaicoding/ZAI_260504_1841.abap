@@ -82,8 +82,8 @@ CLASS lcl_app IMPLEMENTATION.
     DELETE ADJACENT DUPLICATES FROM lt_keys COMPARING matnr werks.
 
     DATA lt_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
-    LOOP AT lt_keys ASSIGNING FIELD-SYMBOL(<ls_k>).
-      APPEND <ls_k>-matnr TO lt_matnr.
+    LOOP AT lt_keys ASSIGNING FIELD-SYMBOL(<ls_k1>).
+      APPEND <ls_k1>-matnr TO lt_matnr.
     ENDLOOP.
     SORT lt_matnr.
     DELETE ADJACENT DUPLICATES FROM lt_matnr.
@@ -111,29 +111,29 @@ CLASS lcl_app IMPLEMENTATION.
     lt_mat_sorted = lt_mat.
     SORT lt_mat_sorted BY matnr.
 
-    LOOP AT lt_keys ASSIGNING <ls_k>.
+    LOOP AT lt_keys ASSIGNING FIELD-SYMBOL(<ls_k>).
       DATA(ls_res) = VALUE ty_result( ).
       ls_res-matnr = <ls_k>-matnr.
       ls_res-werks = <ls_k>-werks.
 
       READ TABLE lt_mat_sorted ASSIGNING FIELD-SYMBOL(<ls_mat>)
-           WITH KEY matnr = <ls_k>-matnr BINARY SEARCH.
+        WITH KEY matnr = <ls_k>-matnr BINARY SEARCH.
       IF sy-subrc = 0.
         ls_res-mtart = <ls_mat>-mtart.
         ls_res-matkl = <ls_mat>-matkl.
         ls_res-maktx = <ls_mat>-maktx.
       ENDIF.
 
-      READ TABLE lt_stock ASSIGNING <ls_s>
-           WITH KEY matnr = <ls_k>-matnr werks = <ls_k>-werks BINARY SEARCH.
+      READ TABLE lt_stock ASSIGNING FIELD-SYMBOL(<ls_s2>)
+        WITH KEY matnr = <ls_k>-matnr werks = <ls_k>-werks BINARY SEARCH.
       IF sy-subrc = 0.
-        ls_res-qty = <ls_s>-qty.
+        ls_res-qty = <ls_s2>-qty.
       ELSE.
         CLEAR ls_res-qty.
-      ENDIF.
+      ENDIF;
 
       READ TABLE lt_move_flag TRANSPORTING NO FIELDS
-           WITH KEY matnr = <ls_k>-matnr werks = <ls_k>-werks BINARY SEARCH.
+        WITH KEY matnr = <ls_k>-matnr werks = <ls_k>-werks BINARY SEARCH.
       IF sy-subrc = 0.
         ls_res-status = |입출고 있음|.
       ELSEIF ls_res-qty IS NOT INITIAL AND ls_res-qty <> 0.
@@ -146,7 +146,7 @@ CLASS lcl_app IMPLEMENTATION.
     ENDLOOP.
 
     DATA lo_alv TYPE REF TO cl_salv_table.
-    cl_salv_table=>factory(
+    cl_sAlv_table=>factory(
       IMPORTING
         r_salv_table = lo_alv
       CHANGING
@@ -164,8 +164,8 @@ CLASS lcl_app IMPLEMENTATION.
 
     IF ir_werks IS INITIAL AND ir_budat IS INITIAL.
       SELECT DISTINCT
-             mseg~matnr,
-             mseg~werks
+        mseg~matnr,
+        mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
@@ -173,8 +173,8 @@ CLASS lcl_app IMPLEMENTATION.
         INTO TABLE @lt_keys.
     ELSEIF ir_werks IS INITIAL.
       SELECT DISTINCT
-             mseg~matnr,
-             mseg~werks
+        mseg~matnr,
+        mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
@@ -183,8 +183,8 @@ CLASS lcl_app IMPLEMENTATION.
         WHERE mkpf~budat IN @ir_budat.
     ELSEIF ir_budat IS INITIAL.
       SELECT DISTINCT
-             mseg~matnr,
-             mseg~werks
+        mseg~matnr,
+        mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
@@ -193,8 +193,8 @@ CLASS lcl_app IMPLEMENTATION.
         WHERE mseg~werks IN @ir_werks.
     ELSE.
       SELECT DISTINCT
-             mseg~matnr,
-             mseg~werks
+        mseg~matnr,
+        mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
@@ -245,4 +245,19 @@ CLASS lcl_app IMPLEMENTATION.
 
     SELECT
       mara~matnr,
-      mara~mtart
+      mara~mtart,
+      mara~matkl,
+      makt~maktx
+      FROM mara
+      LEFT JOIN makt
+        ON makt~matnr = mara~matnr
+       AND makt~spras = @sy-langu
+      INTO TABLE @lt_mat
+      WHERE mara~matnr IN @it_matnr.
+
+    rt_mat = lt_mat.
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  lcl_app=>run( ).
