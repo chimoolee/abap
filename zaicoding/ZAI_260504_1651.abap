@@ -45,7 +45,6 @@ CLASS lcl_app IMPLEMENTATION.
     DATA ls_stock     TYPE ty_stock_sum.
     DATA ls_info      TYPE ty_mat_info.
 
-    " Movements in period for plant
     SELECT DISTINCT mseg~matnr
       FROM mseg
       INNER JOIN mkpf
@@ -58,7 +57,6 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_mov_matnr.
     DELETE ADJACENT DUPLICATES FROM lt_mov_matnr.
 
-    " Current stock <> 0 in plant
     SELECT mard~matnr,
            SUM( mard~labst ) AS qty
       FROM mard
@@ -67,7 +65,6 @@ CLASS lcl_app IMPLEMENTATION.
     HAVING SUM( mard~labst ) <> 0
       INTO TABLE @lt_stock_sum.
 
-    " Build main material list: union of movement and stock
     lt_all_main = lt_mov_matnr.
     DATA lt_stock_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
     LOOP AT lt_stock_sum INTO ls_stock.
@@ -77,7 +74,6 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_all_main.
     DELETE ADJACENT DUPLICATES FROM lt_all_main.
 
-    " Material info for main list
     IF lt_all_main IS NOT INITIAL.
       SELECT a~matnr,
              a~meins,
@@ -93,18 +89,19 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_stock_sum BY matnr.
     SORT lt_info_main BY matnr.
 
-    " Build main section rows
     LOOP AT lt_all_main INTO DATA(lv_matnr).
       CLEAR ls_res.
       ls_res-section = '메인'.
       ls_res-matnr   = lv_matnr.
       ls_res-werks   = p_werks.
-      READ TABLE lt_info_main INTO ls_info WITH KEY matnr = lv_matnr BINARY SEARCH.
+      READ TABLE lt_info_main INTO ls_info
+           WITH KEY matnr = lv_matnr BINARY SEARCH.
       IF sy-subrc = 0.
         ls_res-meins = ls_info-meins.
         ls_res-maktx = ls_info-maktx.
       ENDIF.
-      READ TABLE lt_stock_sum INTO ls_stock WITH KEY matnr = lv_matnr BINARY SEARCH.
+      READ TABLE lt_stock_sum INTO ls_stock
+           WITH KEY matnr = lv_matnr BINARY SEARCH.
       IF sy-subrc = 0.
         ls_res-qty = ls_stock-qty.
       ELSE.
@@ -120,7 +117,6 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_res TO lt_display.
     ENDLOOP.
 
-    " BOM-only components from FERT headers in plant, excluding main list
     SELECT DISTINCT stpo~idnrk
       FROM mast
       INNER JOIN mara AS mh
@@ -134,7 +130,6 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_bom_comp.
     DELETE ADJACENT DUPLICATES FROM lt_bom_comp.
 
-    " Exclude materials already in main list
     IF lt_bom_comp IS NOT INITIAL AND lt_all_main IS NOT INITIAL.
       DATA lt_bom_only TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
       DATA lv_comp TYPE mara-matnr.
@@ -148,7 +143,6 @@ CLASS lcl_app IMPLEMENTATION.
       lt_bom_comp = lt_bom_only.
     ENDIF.
 
-    " Further ensure no current stock
     IF lt_bom_comp IS NOT INITIAL.
       DATA lt_bom_final TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
       LOOP AT lt_bom_comp INTO DATA(lv_bmat).
@@ -161,7 +155,6 @@ CLASS lcl_app IMPLEMENTATION.
       lt_bom_comp = lt_bom_final.
     ENDIF.
 
-    " Info for BOM-only list
     IF lt_bom_comp IS NOT INITIAL.
       SELECT a~matnr,
              a~meins,
@@ -181,7 +174,8 @@ CLASS lcl_app IMPLEMENTATION.
         ls_res-matnr   = lv_bonly.
         ls_res-werks   = p_werks.
         ls_res-qty     = 0.
-        READ TABLE lt_info_bom INTO ls_info WITH KEY matnr = lv_bonly BINARY SEARCH.
+        READ TABLE lt_info_bom INTO ls_info
+             WITH KEY matnr = lv_bonly BINARY SEARCH.
         IF sy-subrc = 0.
           ls_res-meins = ls_info-meins.
           ls_res-maktx = ls_info-maktx.
