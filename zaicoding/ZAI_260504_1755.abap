@@ -18,7 +18,7 @@ CLASS lcl_app IMPLEMENTATION.
         mtart       TYPE mara-mtart,
         matkl       TYPE mara-matkl,
         maktx       TYPE makt-maktx,
-        status_text TYPE char20,
+        status_text TYPE c LENGTH 20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
@@ -108,7 +108,7 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_det TO lt_result.
     ENDLOOP.
 
-    " BOM-only candidates: FERT/HALB assigned BOMs in plant with at least one item
+    " BOM-only candidates: FERT/HALB with components in plant
     SELECT DISTINCT
       mara~matnr
       FROM mast
