@@ -56,7 +56,6 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_result    TYPE ty_t_result.
     DATA lt_matnr     TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
-    " Movement keys by MKPF/MSEG with posting date and plant filter
     SELECT DISTINCT
       mseg~matnr,
       mseg~werks
@@ -68,7 +67,6 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE mkpf~budat IN @s_budat
         AND mseg~werks IN @s_werks.
 
-    " Current stock aggregated by MATNR/WERKS
     SELECT
       mard~matnr,
       mard~werks,
@@ -78,10 +76,8 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE mard~werks IN @s_werks
       GROUP BY mard~matnr, mard~werks.
 
-    " Keep only non-zero stock
     DELETE lt_stock_agg WHERE qty = 0.
 
-    " Build union of keys: movements and non-zero stock
     lt_all_keys = lt_mov_keys.
     LOOP AT lt_stock_agg INTO DATA(ls_sa).
       APPEND VALUE ty_key( matnr = ls_sa-matnr werks = ls_sa-werks ) TO lt_all_keys.
@@ -89,14 +85,12 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_all_keys BY matnr werks.
     DELETE ADJACENT DUPLICATES FROM lt_all_keys COMPARING matnr werks.
 
-    " Prepare material list for attribute fetch
     LOOP AT lt_all_keys INTO DATA(ls_key).
       APPEND ls_key-matnr TO lt_matnr.
     ENDLOOP.
     SORT lt_matnr.
     DELETE ADJACENT DUPLICATES FROM lt_matnr.
 
-    " Fetch attributes from MARA/MAKT (language-dependent text)
     IF lt_matnr IS NOT INITIAL.
       SELECT
         mara~matnr,
@@ -115,16 +109,15 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_mov_keys BY matnr werks.
     SORT lt_stock_agg BY matnr werks.
 
-    " Build result with status and stock quantity
     LOOP AT lt_all_keys INTO ls_key.
       DATA(ls_res) = VALUE ty_result(
-        matnr = ls_key-matnr
-        werks = ls_key-werks
-        mtart = VALUE mara-mtart( )
-        matkl = VALUE mara-matkl( )
-        maktx = VALUE makt-maktx( )
+        matnr     = ls_key-matnr
+        werks     = ls_key-werks
+        mtart     = VALUE mara-mtart( )
+        matkl     = VALUE mara-matkl( )
+        maktx     = VALUE makt-maktx( )
         stock_qty = 0
-        status = '' ).
+        status    = '' ).
 
       READ TABLE lt_attr INTO DATA(ls_attr)
         WITH KEY matnr = ls_key-matnr
