@@ -4,7 +4,8 @@ TABLES mara.
 
 SELECT-OPTIONS:
   s_budat FOR mkpf-budat,
-  s_werks FOR mseg-werks.
+  s_werks FOR mseg-werks,
+  s_matnr FOR mara-matnr.
 
 CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
@@ -39,50 +40,57 @@ CLASS lcl_app IMPLEMENTATION.
         matkl     TYPE mara-matkl,
         maktx     TYPE makt-maktx,
         stock_qty TYPE mard-labst,
-        status    TYPE char20,
+        status    TYPE c LENGTH 20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
-    DATA lt_mov   TYPE ty_t_key.
-    DATA lt_stk   TYPE ty_t_stk.
-    DATA lt_keys  TYPE ty_t_key.
-    DATA lt_tmp   TYPE ty_t_key.
-    DATA lt_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
-    DATA lt_det   TYPE ty_t_matdet.
-    DATA lt_result TYPE ty_t_result.
+    DATA lt_mov     TYPE ty_t_key.
+    DATA lt_stk     TYPE ty_t_stk.
+    DATA lt_keys    TYPE ty_t_key.
+    DATA lt_tmp     TYPE ty_t_key.
+    DATA lt_matnr   TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_det     TYPE ty_t_matdet.
+    DATA lt_result  TYPE ty_t_result.
+    DATA ls_key     TYPE ty_key.
+    DATA ls_det     TYPE ty_matdet.
+    DATA ls_res     TYPE ty_result.
+    DATA lv_found   TYPE abap_bool.
+    DATA lv_stock   TYPE mard-labst.
+    DATA lo_alv     TYPE REF TO cl_salv_table.
 
-    " Movement keys (MSEG + MKPF with BUDAT)
+    " Movement keys (MSEG + MKPF with MKPF~BUDAT)
     IF s_budat IS INITIAL AND s_werks IS INITIAL.
-      SELECT mseg~matnr,
+      SELECT DISTINCT
+             mseg~matnr,
              mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
          AND mkpf~mjahr = mseg~mjahr
-        GROUP BY mseg~matnr, mseg~werks
         INTO TABLE @lt_mov.
     ELSEIF s_budat IS INITIAL AND s_werks IS NOT INITIAL.
-      SELECT mseg~matnr,
+      SELECT DISTINCT
+             mseg~matnr,
              mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
          AND mkpf~mjahr = mseg~mjahr
         WHERE mseg~werks IN @s_werks
-        GROUP BY mseg~matnr, mseg~werks
         INTO TABLE @lt_mov.
     ELSEIF s_budat IS NOT INITIAL AND s_werks IS INITIAL.
-      SELECT mseg~matnr,
+      SELECT DISTINCT
+             mseg~matnr,
              mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
          AND mkpf~mjahr = mseg~mjahr
         WHERE mkpf~budat IN @s_budat
-        GROUP BY mseg~matnr, mseg~werks
         INTO TABLE @lt_mov.
     ELSE.
-      SELECT mseg~matnr,
+      SELECT DISTINCT
+             mseg~matnr,
              mseg~werks
         FROM mseg
         INNER JOIN mkpf
@@ -90,11 +98,10 @@ CLASS lcl_app IMPLEMENTATION.
          AND mkpf~mjahr = mseg~mjahr
         WHERE mkpf~budat IN @s_budat
           AND mseg~werks IN @s_werks
-        GROUP BY mseg~matnr, mseg~werks
         INTO TABLE @lt_mov.
     ENDIF.
 
-    " Current stock per material/plant (MARD) where total != 0
+    " Current stock per material/plant (MARD) where total <> 0
     IF s_werks IS INITIAL.
       SELECT matnr,
              werks,
@@ -116,6 +123,64 @@ CLASS lcl_app IMPLEMENTATION.
 
     " Build union of keys from movements and stock
     lt_keys = lt_mov.
-    lt_tmp  = VALUE ty_t_key( FOR ls IN lt_stk ( matnr = ls-matnr werks = ls-werks ) ).
+    lt_tmp  = VALUE ty_t_key(
+                FOR ls IN lt_stk
+                ( matnr = ls-matnr
+                  werks = ls-werks ) ).
     LOOP AT lt_tmp ASSIGNING FIELD-SYMBOL(<lk>).
-      READ TABLE lt_keys WITH KEY matnr = <lk>-matnr werks =
+      READ TABLE lt_keys WITH KEY matnr = <lk>-matnr
+                                  werks = <lk>-werks
+                       TRANSPORTING NO FIELDS.
+      IF sy-subrc <> 0.
+        APPEND <lk> TO lt_keys.
+      ENDIF.
+    ENDLOOP.
+
+    " Apply optional material filter from s_matnr
+    IF s_matnr IS NOT INITIAL.
+      DELETE lt_keys WHERE NOT ( matnr IN s_matnr ).
+    ENDIF.
+
+    " Prepare material list for details
+    lt_matnr = VALUE #( FOR k IN lt_keys ( k-matnr ) ).
+    SORT lt_matnr BY table_line.
+    DELETE ADJACENT DUPLICATES FROM lt_matnr COMPARING table_line.
+
+    " Read material details with text
+    IF lt_matnr IS NOT INITIAL.
+      SELECT mara~matnr,
+             mara~mtart,
+             mara~matkl,
+             makt~maktx
+        FROM mara
+        LEFT JOIN makt
+          ON makt~matnr = mara~matnr
+         AND makt~spras = @sy-langu
+        INTO TABLE @lt_det
+        WHERE mara~matnr IN @lt_matnr.
+    ENDIF.
+
+    " Build result with status and stock qty
+    LOOP AT lt_keys INTO ls_key.
+      CLEAR: ls_res, lv_stock, lv_found.
+      ls_res-matnr = ls_key-matnr.
+      ls_res-werks = ls_key-werks.
+
+      " Map details
+      READ TABLE lt_det INTO ls_det WITH KEY matnr = ls_key-matnr.
+      IF sy-subrc = 0.
+        ls_res-mtart = ls_det-mtart.
+        ls_res-matkl = ls_det-matkl.
+        ls_res-maktx = ls_det-maktx.
+      ENDIF.
+
+      " Stock quantity if any
+      READ TABLE lt_stk WITH KEY matnr = ls_key-matnr
+                                werks = ls_key-werks
+                        INTO DATA(ls_stk).
+      IF sy-subrc = 0.
+        lv_stock = ls_stk-qty.
+      ELSE.
+        lv_stock = 0.
+      ENDIF.
+      ls_res-stock_qty = lv
