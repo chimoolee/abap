@@ -11,8 +11,11 @@ ENDCLASS.
 
 CLASS lcl_app IMPLEMENTATION.
   METHOD run.
-    DATA lv_from TYPE sy-datum VALUE p_from.
-    DATA lv_to   TYPE sy-datum VALUE p_to.
+    DATA lv_from TYPE sy-datum.
+    DATA lv_to   TYPE sy-datum.
+    lv_from = p_from.
+    lv_to   = p_to.
+
     IF lv_from > lv_to.
       DATA lv_tmp TYPE sy-datum.
       lv_tmp = lv_from.
@@ -83,19 +86,19 @@ CLASS lcl_app IMPLEMENTATION.
         INTO TABLE @lt_mat.
     ENDIF.
 
-    " Helper to get stock qty per material
+    " Prepare for lookups
     SORT lt_stock BY matnr.
     SORT lt_move_matnr.
     SORT lt_union.
 
-    " Result row
+    " Result rows
     TYPES: BEGIN OF ty_row,
-             section TYPE char10,
+             section TYPE c LENGTH 10,
              matnr   TYPE mara-matnr,
              mtart   TYPE mara-mtart,
              maktx   TYPE makt-maktx,
              qty     TYPE mard-labst,
-             note    TYPE char20,
+             note    TYPE c LENGTH 20,
            END OF ty_row.
     TYPES ty_t_row TYPE STANDARD TABLE OF ty_row WITH EMPTY KEY.
 
@@ -110,21 +113,25 @@ CLASS lcl_app IMPLEMENTATION.
         maktx   = <ls_mat>-maktx
         qty     = 0
         note    = '' ).
+
       DATA ls_stk TYPE ty_stock.
       READ TABLE lt_stock INTO ls_stk WITH KEY matnr = <ls_mat>-matnr BINARY SEARCH.
       IF sy-subrc = 0.
         ls_row-qty = ls_stk-qty.
       ENDIF.
+
       DATA(lv_moved) = abap_false.
       READ TABLE lt_move_matnr WITH KEY table_line = <ls_mat>-matnr BINARY SEARCH.
       IF sy-subrc = 0.
         lv_moved = abap_true.
       ENDIF.
+
       IF lv_moved = abap_true.
         ls_row-note = '입출고 있음'.
       ELSE.
         ls_row-note = '재고만 있음'.
       ENDIF.
+
       APPEND ls_row TO lt_main.
     ENDLOOP.
 
@@ -137,7 +144,6 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE mara~mtart = 'FERT'
         AND mast~werks = @p_werks
       INTO TABLE @lt_hdr.
-
     SORT lt_hdr.
 
     " BOM components for headers in plant
@@ -147,8 +153,8 @@ CLASS lcl_app IMPLEMENTATION.
         FROM mast AS mast
         INNER JOIN stpo AS stpo
           ON stpo~stlnr = mast~stlnr
-       WHERE mast~matnr IN @lt_hdr
-         AND mast~werks = @p_werks
+        WHERE mast~matnr IN @lt_hdr
+          AND mast~werks = @p_werks
         INTO TABLE @lt_comp.
       SORT lt_comp.
     ENDIF.
@@ -199,22 +205,24 @@ CLASS lcl_app IMPLEMENTATION.
         maktx   = <ls_mat>-maktx
         qty     = 0
         note    = '' ).
-      " Stock if any
+
       READ TABLE lt_stock INTO ls_stk WITH KEY matnr = <ls_mat>-matnr BINARY SEARCH.
       IF sy-subrc = 0.
         ls_bom_row-qty = ls_stk-qty.
       ENDIF.
-      " Note: header or component-only
+
       DATA(lv_is_hdr) = abap_false.
       READ TABLE lt_hdr WITH KEY table_line = <ls_mat>-matnr BINARY SEARCH.
       IF sy-subrc = 0.
         lv_is_hdr = abap_true.
       ENDIF.
+
       IF lv_is_hdr = abap_true.
         ls_bom_row-note = 'FERT BOM'.
       ELSE.
         ls_bom_row-note = 'BOM 만 있음'.
       ENDIF.
+
       APPEND ls_bom_row TO lt_bom.
     ENDLOOP.
 
@@ -227,7 +235,7 @@ CLASS lcl_app IMPLEMENTATION.
         t_table      = lt_main ).
     lo_alv->get_display_settings(
       )->set_list_header(
-      value = '자재 리스트 - 메인(입출고 또는 재고 보유) - 플랜트 ' && p_werks ).
+        value = '자재 리스트 - 메인(입출고 또는 재고 보유) - 플랜트 ' && p_werks ).
     lo_alv->display( ).
 
     " Display BOM section
@@ -238,7 +246,7 @@ CLASS lcl_app IMPLEMENTATION.
         t_table      = lt_bom ).
     lo_alv->get_display_settings(
       )->set_list_header(
-      value = '자재 리스트 - BOM 섹션(FERT 및 BOM 전용) - 플랜트 ' && p_werks ).
+        value = '자재 리스트 - BOM 섹션(FERT 및 BOM 전용) - 플랜트 ' && p_werks ).
     lo_alv->display( ).
   ENDMETHOD.
 ENDCLASS.
