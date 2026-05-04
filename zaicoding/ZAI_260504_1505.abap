@@ -1,7 +1,8 @@
 REPORT ZAI_260504_1505.
 
 PARAMETERS p_werks TYPE werks_d OBLIGATORY.
-SELECT-OPTIONS s_budat FOR matdoc-budat_mkpf NO-EXTENSION.
+SELECT-OPTIONS s_budat FOR sy-datum OBLIGATORY.
+PARAMETERS p_year TYPE char4 DEFAULT sy-datum(4).
 
 CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
@@ -45,31 +46,34 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_main      TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
     DATA lt_bom_only  TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
-    " 1) Materials with movements in date range and plant
+    " Materials with movements in date range and plant (MKPF/MSEG)
     SELECT DISTINCT
-           md~matnr
-      FROM matdoc AS md
-      WHERE md~werks = @p_werks
-        AND md~budat_mkpf IN @s_budat
+           ms~matnr
+      FROM mseg AS ms
+      INNER JOIN mkpf AS mk
+        ON mk~mblnr = ms~mblnr
+       AND mk~mjahr = ms~mjahr
+     WHERE ms~werks = @p_werks
+       AND mk~budat IN @s_budat
       INTO TABLE @lt_mov_matnr.
 
-    " 2) Current stock not zero in plant
+    " Current stock not zero in plant
     SELECT mard~matnr,
            mard~werks,
            SUM( mard~labst ) AS qty
       FROM mard AS mard
-      WHERE mard~werks = @p_werks
-      GROUP BY mard~matnr, mard~werks
-      HAVING SUM( mard~labst ) <> 0
+     WHERE mard~werks = @p_werks
+     GROUP BY mard~matnr, mard~werks
+    HAVING SUM( mard~labst ) <> 0
       INTO TABLE @lt_stock.
 
-    " 3) Union set of materials (movement or stock)
+    " Union of materials (movement or stock)
     lt_all_matnr = lt_mov_matnr.
     LOOP AT lt_stock ASSIGNING FIELD-SYMBOL(<ls_stock>).
       INSERT <ls_stock>-matnr INTO TABLE lt_all_matnr.
     ENDLOOP.
 
-    " 4) Material master data + description
+    " Material master data + description
     IF lt_all_matnr IS NOT INITIAL.
       SELECT mara~matnr,
              mara~matkl,
@@ -79,32 +83,32 @@ CLASS lcl_app IMPLEMENTATION.
         FROM mara AS mara
         INNER JOIN makt AS makt
           ON makt~matnr = mara~matnr
-        WHERE mara~matnr IN @lt_all_matnr
-          AND makt~spras = @sy-langu
+       WHERE mara~matnr IN @lt_all_matnr
+         AND makt~spras = @sy-langu
         INTO TABLE @lt_mat.
     ENDIF.
 
-    " Helper for quick lookups
+    " Helpers
     DATA lt_stock_by_mat TYPE HASHED TABLE OF ty_stock
-      WITH UNIQUE KEY matnr werks.
+                         WITH UNIQUE KEY matnr werks.
     lt_stock_by_mat = lt_stock.
 
     DATA lt_mov_set TYPE HASHED TABLE OF mara-matnr
-      WITH UNIQUE KEY table_line.
+                    WITH UNIQUE KEY table_line.
     lt_mov_set = lt_mov_matnr.
 
-    " 5) Build main result
+    " Build main result
     LOOP AT lt_mat ASSIGNING FIELD-SYMBOL(<ls_mat>).
       DATA(lv_stock_qty) = CONV mard-labst( 0 ).
       READ TABLE lt_stock_by_mat ASSIGNING FIELD-SYMBOL(<ls_s>)
-        WITH TABLE KEY matnr = <ls_mat>-matnr werks = p_werks.
+           WITH TABLE KEY matnr = <ls_mat>-matnr werks = p_werks.
       IF sy-subrc = 0.
         lv_stock_qty = <ls_s>-qty.
       ENDIF.
 
       DATA(lv_status) = CONV char20( '' ).
       READ TABLE lt_mov_set WITH TABLE KEY table_line = <ls_mat>-matnr
-        TRANSPORTING NO FIELDS.
+           TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_status = '입출고 있음'.
       ELSE.
@@ -122,22 +126,22 @@ CLASS lcl_app IMPLEMENTATION.
                status = lv_status ) TO lt_main.
     ENDLOOP.
 
-    " 6) BOM-only components for FERT with BOM in plant
+    " BOM-only components for FERT with BOM in plant
     DATA lt_fert_with_bom TYPE ty_t_matnr.
     SELECT DISTINCT mast~matnr
       FROM mast AS mast
       INNER JOIN mara AS mara
         ON mara~matnr = mast~matnr
-      WHERE mast~werks = @p_werks
-        AND mara~mtart = 'FERT'
+     WHERE mast~werks = @p_werks
+       AND mara~mtart = 'FERT'
       INTO TABLE @lt_fert_with_bom.
 
     DATA lt_stlnr TYPE STANDARD TABLE OF stko-stlnr WITH EMPTY KEY.
     IF lt_fert_with_bom IS NOT INITIAL.
       SELECT DISTINCT mast~stlnr
         FROM mast AS mast
-        WHERE mast~werks = @p_werks
-          AND mast~matnr IN @lt_fert_with_bom
+       WHERE mast~werks = @p_werks
+         AND mast~matnr IN @lt_fert_with_bom
         INTO TABLE @lt_stlnr.
     ENDIF.
 
@@ -145,14 +149,14 @@ CLASS lcl_app IMPLEMENTATION.
     IF lt_stlnr IS NOT INITIAL.
       SELECT DISTINCT stpo~idnrk
         FROM stpo AS stpo
-        WHERE stpo~stlnr IN @lt_stlnr
+       WHERE stpo~stlnr IN @lt_stlnr
         INTO TABLE @lt_bom_comp.
     ENDIF.
 
     " Exclude materials already in main list (movement or stock)
     IF lt_bom_comp IS NOT INITIAL.
       DATA lt_main_set TYPE HASHED TABLE OF mara-matnr
-        WITH UNIQUE KEY table_line.
+                       WITH UNIQUE KEY table_line.
       LOOP AT lt_main ASSIGNING FIELD-SYMBOL(<ls_main_mat>).
         INSERT <ls_main_mat>-matnr INTO TABLE lt_main_set.
       ENDLOOP.
@@ -160,7 +164,7 @@ CLASS lcl_app IMPLEMENTATION.
       DATA lt_bom_only_mat TYPE ty_t_matnr.
       LOOP AT lt_bom_comp ASSIGNING FIELD-SYMBOL(<lv_comp>).
         READ TABLE lt_main_set WITH TABLE KEY table_line = <lv_comp>
-          TRANSPORTING NO FIELDS.
+             TRANSPORTING NO FIELDS.
         IF sy-subrc <> 0.
           INSERT <lv_comp> INTO TABLE lt_bom_only_mat.
         ENDIF.
@@ -177,8 +181,8 @@ CLASS lcl_app IMPLEMENTATION.
           FROM mara AS mara
           INNER JOIN makt AS makt
             ON makt~matnr = mara~matnr
-          WHERE mara~matnr IN @lt_bom_only_mat
-            AND makt~spras = @sy-langu
+         WHERE mara~matnr IN @lt_bom_only_mat
+           AND makt~spras = @sy-langu
           INTO TABLE @lt_bom_mat.
 
         LOOP AT lt_bom_mat ASSIGNING FIELD-SYMBOL(<ls_bm>).
@@ -195,7 +199,7 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
     ENDIF.
 
-    " 7) Display
+    " Display
     IF lt_main IS INITIAL AND lt_bom_only IS INITIAL.
       WRITE: / '선택한 조건에 해당하는 데이터가 없습니다.'.
       RETURN.
