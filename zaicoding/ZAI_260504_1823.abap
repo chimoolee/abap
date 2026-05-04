@@ -1,7 +1,10 @@
 REPORT ZAI_260504_1823.
 
-SELECT-OPTIONS: s_budat FOR mkpf-budat,
-                 s_werks FOR mard-werks.
+TABLES: mara, mard.
+
+SELECT-OPTIONS:
+  s_budat FOR mkpf-budat,
+  s_werks FOR mard-werks.
 
 CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
@@ -37,27 +40,36 @@ CLASS lcl_app IMPLEMENTATION.
         matkl       TYPE mara-matkl,
         maktx       TYPE makt-maktx,
         labst       TYPE mard-labst,
-        status_text TYPE char20,
+        status_text TYPE c LENGTH 20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
     DATA lt_keys    TYPE ty_t_key.
-    DATA lt_mard    TYPE STANDARD TABLE OF ty_key WITH EMPTY KEY.
-    DATA lt_mseg    TYPE STANDARD TABLE OF ty_key WITH EMPTY KEY.
     DATA lt_attr    TYPE ty_t_attr.
     DATA lt_result  TYPE ty_t_result.
 
     DATA lt_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
-    " 1) Stock > 0 per plant
+    " 1) Stock > 0 per plant (aggregate per MATNR/WERKS)
+    TYPES:
+      BEGIN OF ty_mard_agg,
+        matnr TYPE mard-matnr,
+        werks TYPE mard-werks,
+        labst TYPE mard-labst,
+      END OF ty_mard_agg,
+      ty_t_mard_agg TYPE STANDARD TABLE OF ty_mard_agg WITH EMPTY KEY.
+
+    DATA lt_mard_raw TYPE ty_t_mard_agg.
+
     SELECT
       mard~matnr,
       mard~werks,
-      mard~labst
+      SUM( mard~labst ) AS labst
       FROM mard
-      INTO TABLE @DATA(lt_mard_raw)
       WHERE mard~werks IN @s_werks
-        AND mard~labst <> 0.
+      GROUP BY mard~matnr, mard~werks
+      HAVING SUM( mard~labst ) <> 0
+      INTO TABLE @lt_mard_raw.
 
     LOOP AT lt_mard_raw ASSIGNING FIELD-SYMBOL(<ls_mard>).
       DATA(ls_key) = VALUE ty_key(
@@ -70,6 +82,15 @@ CLASS lcl_app IMPLEMENTATION.
     ENDLOOP.
 
     " 2) Movements by posting date and plant
+    TYPES:
+      BEGIN OF ty_mseg_key,
+        matnr TYPE mseg-matnr,
+        werks TYPE mseg-werks,
+      END OF ty_mseg_key,
+      ty_t_mseg_key TYPE STANDARD TABLE OF ty_mseg_key WITH EMPTY KEY.
+
+    DATA lt_mseg_raw TYPE ty_t_mseg_key.
+
     SELECT DISTINCT
       mseg~matnr,
       mseg~werks
@@ -77,12 +98,11 @@ CLASS lcl_app IMPLEMENTATION.
       INNER JOIN mkpf
         ON mkpf~mblnr = mseg~mblnr
        AND mkpf~mjahr = mseg~mjahr
-      INTO TABLE @DATA(lt_mseg_raw)
+      INTO TABLE @lt_mseg_raw
       WHERE mseg~werks IN @s_werks
         AND mkpf~budat IN @s_budat.
 
     LOOP AT lt_mseg_raw ASSIGNING FIELD-SYMBOL(<ls_mseg>).
-      " Try to find existing key (maybe from stock). Update or append.
       READ TABLE lt_keys ASSIGNING FIELD-SYMBOL(<ls_key>)
         WITH KEY matnr = <ls_mseg>-matnr werks = <ls_mseg>-werks.
       IF sy-subrc = 0.
@@ -124,15 +144,15 @@ CLASS lcl_app IMPLEMENTATION.
     LOOP AT lt_keys ASSIGNING <ls_k>.
       READ TABLE lt_attr ASSIGNING FIELD-SYMBOL(<ls_a>)
         WITH KEY matnr = <ls_k>-matnr.
-      DATA(lv_status) = COND char20(
-        WHEN <ls_k>-has_mvt = abap_true THEN '입출고 있음'
-        ELSE '재고만 있음' ).
+      DATA(lv_status) = COND #( WHEN <ls_k>-has_mvt = abap_true
+                                 THEN '입출고 있음'
+                                 ELSE '재고만 있음' ).
       APPEND VALUE ty_result(
         matnr       = <ls_k>-matnr
         werks       = <ls_k>-werks
-        mtart       = COND mara-mtart( WHEN <ls_a> IS ASSIGNED THEN <ls_a>-mtart ELSE '' )
-        matkl       = COND mara-matkl( WHEN <ls_a> IS ASSIGNED THEN <ls_a>-matkl ELSE '' )
-        maktx       = COND makt-maktx( WHEN <ls_a> IS ASSIGNED THEN <ls_a>-maktx ELSE '' )
+        mtart       = COND #( WHEN <ls_a> IS ASSIGNED THEN <ls_a>-mtart ELSE '' )
+        matkl       = COND #( WHEN <ls_a> IS ASSIGNED THEN <ls_a>-matkl ELSE '' )
+        maktx       = COND #( WHEN <ls_a> IS ASSIGNED THEN <ls_a>-maktx ELSE '' )
         labst       = <ls_k>-labst
         status_text = lv_status ) TO lt_result.
     ENDLOOP.
