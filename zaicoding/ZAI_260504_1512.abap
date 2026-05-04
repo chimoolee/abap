@@ -24,7 +24,7 @@ CLASS lcl_app IMPLEMENTATION.
       lv_endda = lv_tmp.
     ENDIF.
 
-    TYPES: ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    TYPES ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
     TYPES: BEGIN OF ty_stock,
              matnr TYPE mara-matnr,
@@ -60,7 +60,7 @@ CLASS lcl_app IMPLEMENTATION.
     SELECT matdoc~matnr
       FROM matdoc
       WHERE matdoc~werks = @p_werks
-        AND matdoc~budat_mkpf BETWEEN @lv_begda AND @lv_endda
+        AND matdoc~budat BETWEEN @lv_begda AND @lv_endda
       GROUP BY matdoc~matnr
       INTO TABLE @lt_mov.
 
@@ -71,14 +71,13 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE mard~werks = @p_werks
       GROUP BY mard~matnr
       INTO TABLE @lt_stock.
-    " Keep only materials with non-zero stock
     DELETE lt_stock WHERE labst = 0.
 
     " 3) Union of materials from movement and stock
     lt_all = lt_mov.
     DATA ls_stock LIKE LINE OF lt_stock.
     LOOP AT lt_stock INTO ls_stock.
-      IF line_exists( lt_all[ table_line = ls_stock-matnr ] ) IS INITIAL.
+      IF line_exists( lt_all[ table_line = ls_stock-matnr ] ) = abap_false.
         APPEND ls_stock-matnr TO lt_all.
       ENDIF.
     ENDLOOP.
@@ -125,10 +124,10 @@ CLASS lcl_app IMPLEMENTATION.
     ENDLOOP.
 
     " 6) BOM-related section
-    TYPES: ty_t_bom_mats TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    TYPES ty_t_bom_mats TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
-    DATA lt_fert_bom TYPE ty_t_bom_mats.
-    DATA lt_comp_all TYPE ty_t_bom_mats.
+    DATA lt_fert_bom  TYPE ty_t_bom_mats.
+    DATA lt_comp_all  TYPE ty_t_bom_mats.
     DATA lt_comp_only TYPE ty_t_bom_mats.
 
     " 6a) Finished goods with BOM (via MAST for the plant)
@@ -137,7 +136,6 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE mast~werks = @p_werks
       INTO TABLE @lt_fert_bom.
 
-    " Keep only those that are FERT
     IF lt_fert_bom IS NOT INITIAL.
       DATA lt_fert_info TYPE ty_t_mat.
       SELECT mara~matnr,
@@ -151,7 +149,6 @@ CLASS lcl_app IMPLEMENTATION.
           AND mara~mtart = 'FERT'
         INTO TABLE @lt_fert_info.
 
-      " Add finished goods with BOM to BOM section, with movement/stock info
       DATA lt_bom_res TYPE ty_t_result.
       LOOP AT lt_fert_info INTO ls_mat.
         CLEAR ls_res.
@@ -181,7 +178,6 @@ CLASS lcl_app IMPLEMENTATION.
       ENDLOOP.
 
       " 6b) Components that are only BOM elements (no stock, no movement)
-      " Components from STPO (IDNRK) via MAST
       SELECT DISTINCT stpo~idnrk
         FROM mast
         INNER JOIN stpo
@@ -189,9 +185,8 @@ CLASS lcl_app IMPLEMENTATION.
         WHERE mast~werks = @p_werks
         INTO TABLE @lt_comp_all.
 
-      " Keep components that are not in main list (no stock/movement)
       LOOP AT lt_comp_all ASSIGNING FIELD-SYMBOL(<lv_comp>).
-        IF line_exists( lt_all[ table_line = <lv_comp> ] ) IS INITIAL.
+        IF line_exists( lt_all[ table_line = <lv_comp> ] ) = abap_false.
           APPEND <lv_comp> TO lt_comp_only.
         ENDIF.
       ENDLOOP.
@@ -221,7 +216,6 @@ CLASS lcl_app IMPLEMENTATION.
         ENDLOOP.
       ENDIF.
 
-      " Display BOM section
       IF lt_bom_res IS INITIAL.
         WRITE: / 'BOM 섹션: 표시할 데이터가 없습니다.'.
       ELSE.
