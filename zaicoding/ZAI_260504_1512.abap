@@ -11,8 +11,11 @@ ENDCLASS.
 
 CLASS lcl_app IMPLEMENTATION.
   METHOD run.
-    DATA lv_begda TYPE sy-datum VALUE p_begda.
-    DATA lv_endda TYPE sy-datum VALUE p_endda.
+    DATA lv_begda TYPE sy-datum.
+    DATA lv_endda TYPE sy-datum.
+
+    lv_begda = p_begda.
+    lv_endda = p_endda.
 
     IF lv_begda GT lv_endda.
       DATA lv_tmp TYPE sy-datum.
@@ -80,9 +83,8 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
 
-    " If nothing to show in main section, still continue for BOM section
+    " 4) Fetch material type and description
     IF lt_all IS NOT INITIAL.
-      " 4) Fetch material type and description
       SELECT mara~matnr,
              mara~mtart,
              makt~maktx
