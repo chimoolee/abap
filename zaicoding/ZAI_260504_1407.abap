@@ -8,7 +8,7 @@ CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
     CLASS-METHODS run.
   PRIVATE SECTION.
-    TYPES: ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    TYPES ty_t_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
     TYPES: BEGIN OF ty_stock,
              matnr TYPE mara-matnr,
@@ -37,6 +37,13 @@ CLASS lcl_app DEFINITION FINAL.
            END OF ty_bomsec.
     TYPES ty_t_bomsec TYPE STANDARD TABLE OF ty_bomsec WITH EMPTY KEY.
 
+    TYPES: BEGIN OF ty_makt,
+             matnr TYPE makt-matnr,
+             spras TYPE makt-spras,
+             maktx TYPE makt-maktx,
+           END OF ty_makt.
+    TYPES ty_t_makt TYPE STANDARD TABLE OF ty_makt WITH EMPTY KEY.
+
     CLASS-METHODS get_movements
       IMPORTING
         i_werks TYPE werks_d
@@ -55,7 +62,7 @@ CLASS lcl_app DEFINITION FINAL.
       IMPORTING
         it_matnr TYPE ty_t_matnr
       EXPORTING
-        et_texts TYPE STANDARD TABLE OF makt WITH EMPTY KEY.
+        et_texts TYPE ty_t_makt.
 
     CLASS-METHODS fill_main
       IMPORTING
@@ -75,12 +82,12 @@ CLASS lcl_app DEFINITION FINAL.
 
     CLASS-METHODS display_alv_main
       IMPORTING
-        it_tab  TYPE ty_t_main
+        it_tab   TYPE ty_t_main
         iv_title TYPE string.
 
     CLASS-METHODS display_alv_bom
       IMPORTING
-        it_tab  TYPE ty_t_bomsec
+        it_tab   TYPE ty_t_bomsec
         iv_title TYPE string.
 ENDCLASS.
 
@@ -92,20 +99,26 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_main  TYPE ty_t_main.
     DATA lt_bom   TYPE ty_t_bomsec.
 
-    get_movements( EXPORTING i_werks = p_werks i_begda = p_begda i_endda = p_endda
-                   IMPORTING et_matnr = lt_mov ).
-    get_stocks( EXPORTING i_werks = p_werks
-                IMPORTING et_stock = lt_stock ).
+    get_movements(
+      EXPORTING i_werks = p_werks i_begda = p_begda i_endda = p_endda
+      IMPORTING et_matnr = lt_mov ).
+
+    get_stocks(
+      EXPORTING i_werks = p_werks
+      IMPORTING et_stock = lt_stock ).
 
     lt_all = lt_mov.
     LOOP AT lt_stock ASSIGNING FIELD-SYMBOL(<ls_stk>).
       INSERT <ls_stk>-matnr INTO TABLE lt_all.
     ENDLOOP.
 
-    fill_main( EXPORTING it_all = lt_all it_mov = lt_mov it_stock = lt_stock
-               IMPORTING et_main = lt_main ).
-    build_bom_section( EXPORTING i_werks = p_werks it_mov = lt_mov it_stock = lt_stock
-                       IMPORTING et_bom = lt_bom ).
+    fill_main(
+      EXPORTING it_all = lt_all it_mov = lt_mov it_stock = lt_stock
+      IMPORTING et_main = lt_main ).
+
+    build_bom_section(
+      EXPORTING i_werks = p_werks it_mov = lt_mov it_stock = lt_stock
+      IMPORTING et_bom = lt_bom ).
 
     display_alv_main( it_tab = lt_main iv_title = |자재 목록 (입출고/재고)| ).
     display_alv_bom(  it_tab = lt_bom  iv_title = |BOM 관련 섹션 (완제품 BOM, BOM 만 있음)| ).
@@ -132,7 +145,7 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD get_texts.
-    DATA lt_texts TYPE STANDARD TABLE OF makt WITH EMPTY KEY.
+    DATA lt_texts TYPE ty_t_makt.
     IF it_matnr IS INITIAL.
       CLEAR et_texts.
       RETURN.
@@ -152,7 +165,7 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD fill_main.
-    DATA lt_texts TYPE STANDARD TABLE OF makt WITH EMPTY KEY.
+    DATA lt_texts TYPE ty_t_makt.
     DATA lt_mara  TYPE STANDARD TABLE OF mara WITH EMPTY KEY.
     DATA ls_main  TYPE ty_main.
 
@@ -171,8 +184,9 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE a~matnr = @it_all-table_line
       INTO TABLE @lt_mara.
 
-    get_texts( EXPORTING it_matnr = it_all
-               IMPORTING et_texts = lt_texts ).
+    get_texts(
+      EXPORTING it_matnr = it_all
+      IMPORTING et_texts = lt_texts ).
 
     LOOP AT lt_mara ASSIGNING FIELD-SYMBOL(<la>).
       CLEAR ls_main.
@@ -208,12 +222,12 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD build_bom_section.
-    DATA lt_fert_bom TYPE ty_t_matnr.
-    DATA lt_comp_all TYPE ty_t_matnr.
+    DATA lt_fert_bom      TYPE ty_t_matnr.
+    DATA lt_comp_all      TYPE ty_t_matnr.
     DATA lt_comp_filtered TYPE ty_t_matnr.
-    DATA lt_texts TYPE STANDARD TABLE OF makt WITH EMPTY KEY.
-    DATA lt_mara TYPE STANDARD TABLE OF mara WITH EMPTY KEY.
-    DATA ls_bom TYPE ty_bomsec.
+    DATA lt_texts         TYPE ty_t_makt.
+    DATA lt_mara          TYPE STANDARD TABLE OF mara WITH EMPTY KEY.
+    DATA ls_bom           TYPE ty_bomsec.
 
     SELECT DISTINCT
       ma~matnr
@@ -264,8 +278,9 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE a~matnr = @lt_all_bom-table_line
       INTO TABLE @lt_mara.
 
-    get_texts( EXPORTING it_matnr = lt_all_bom
-               IMPORTING et_texts = lt_texts ).
+    get_texts(
+      EXPORTING it_matnr = lt_all_bom
+      IMPORTING et_texts = lt_texts ).
 
     LOOP AT lt_fert_bom ASSIGNING FIELD-SYMBOL(<lfb>).
       CLEAR ls_bom.
