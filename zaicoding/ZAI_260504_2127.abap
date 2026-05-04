@@ -165,7 +165,7 @@ CLASS lcl_app IMPLEMENTATION.
 
       DATA(lv_has_move) = abap_false.
       READ TABLE lt_move WITH KEY matnr = ls_pair-matnr
-                                   werks = ls_pair-werks
+                                werks = ls_pair-werks
            TRANSPORTING NO FIELDS
            BINARY SEARCH.
       IF sy-subrc = 0.
