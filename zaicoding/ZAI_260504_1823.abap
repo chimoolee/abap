@@ -50,7 +50,6 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA lt_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
-    " 1) Stock > 0 per plant (aggregate per MATNR/WERKS)
     TYPES:
       BEGIN OF ty_mard_agg,
         matnr TYPE mard-matnr,
@@ -81,7 +80,6 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_key TO lt_keys.
     ENDLOOP.
 
-    " 2) Movements by posting date and plant
     TYPES:
       BEGIN OF ty_mseg_key,
         matnr TYPE mseg-matnr,
@@ -118,7 +116,6 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
 
-    " 3) Prepare material list for attributes
     LOOP AT lt_keys ASSIGNING FIELD-SYMBOL(<ls_k>).
       APPEND <ls_k>-matnr TO lt_matnr.
     ENDLOOP.
@@ -126,7 +123,6 @@ CLASS lcl_app IMPLEMENTATION.
     DELETE ADJACENT DUPLICATES FROM lt_matnr.
 
     IF lt_matnr IS NOT INITIAL.
-      " 4) Read attributes (MARA + MAKT, text in logon language)
       SELECT
         mara~matnr,
         mara~mtart,
@@ -140,13 +136,12 @@ CLASS lcl_app IMPLEMENTATION.
         WHERE mara~matnr IN @lt_matnr.
     ENDIF.
 
-    " 5) Build final result
     LOOP AT lt_keys ASSIGNING <ls_k>.
       READ TABLE lt_attr ASSIGNING FIELD-SYMBOL(<ls_a>)
         WITH KEY matnr = <ls_k>-matnr.
       DATA(lv_status) = COND #( WHEN <ls_k>-has_mvt = abap_true
-                                 THEN '입출고 있음'
-                                 ELSE '재고만 있음' ).
+                                THEN '입출고 있음'
+                                ELSE '재고만 있음' ).
       APPEND VALUE ty_result(
         matnr       = <ls_k>-matnr
         werks       = <ls_k>-werks
@@ -157,7 +152,6 @@ CLASS lcl_app IMPLEMENTATION.
         status_text = lv_status ) TO lt_result.
     ENDLOOP.
 
-    " 6) Display ALV
     DATA lo_alv TYPE REF TO cl_salv_table.
     cl_salv_table=>factory(
       IMPORTING
