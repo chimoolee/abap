@@ -1,5 +1,7 @@
 REPORT ZAI_260504_1621.
 
+TABLES: mara, mard.
+
 PARAMETERS p_werks TYPE werks_d OBLIGATORY.
 SELECT-OPTIONS s_budat FOR sy-datum OBLIGATORY.
 
@@ -38,7 +40,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA lo_alv TYPE REF TO cl_salv_table.
 
-*   1) Materials with movements in period for plant
+*   Materials with movements in period for plant
     SELECT DISTINCT mseg~matnr
       FROM mseg AS mseg
       INNER JOIN mkpf AS mkpf
@@ -48,7 +50,7 @@ CLASS lcl_app IMPLEMENTATION.
        AND mkpf~budat IN @s_budat
       INTO TABLE @lt_mov_mat.
 
-*   2) Materials with current stock <> 0 in plant
+*   Materials with current stock <> 0 in plant
     SELECT mard~matnr, mard~labst
       FROM mard AS mard
      WHERE mard~werks = @p_werks
@@ -61,7 +63,7 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_stock-matnr TO lt_stock_mat.
     ENDLOOP.
 
-*   3) Finished goods with BOM in plant
+*   Finished goods with BOM in plant
     SELECT DISTINCT mast~matnr
       FROM mast AS mast
       INNER JOIN mara AS mara
@@ -70,7 +72,7 @@ CLASS lcl_app IMPLEMENTATION.
        AND mara~mtart = 'FERT'
       INTO TABLE @lt_bom_fg.
 
-*   4) BOM component materials for BOMs assigned in plant
+*   BOM component materials for BOMs assigned in plant
     SELECT DISTINCT stpo~idnrk
       FROM mast AS mast
       INNER JOIN stpo AS stpo
@@ -91,7 +93,7 @@ CLASS lcl_app IMPLEMENTATION.
     lt_bom_fg_set  = lt_bom_fg.
     lt_bom_cmp_set = lt_bom_comp.
 
-*   Result: 1) Movement exists
+*   Result: Movement exists
     DATA ls_row TYPE ty_row.
     DATA lv_stock_qty TYPE mard-labst.
     DATA lv_matnr TYPE mara-matnr.
@@ -112,7 +114,7 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_row TO lt_result.
     ENDLOOP.
 
-*   2) Stock only (no movement)
+*   Stock only (no movement)
     LOOP AT lt_stock INTO ls_stock.
       READ TABLE lt_mov_set WITH TABLE KEY table_line = ls_stock-matnr
            TRANSPORTING NO FIELDS.
@@ -129,7 +131,7 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
 
-*   3) BOM only components (no movement, no stock)
+*   BOM only components (no movement, no stock)
     LOOP AT lt_bom_comp INTO lv_matnr.
       READ TABLE lt_mov_set WITH TABLE KEY table_line = lv_matnr
            TRANSPORTING NO FIELDS.
@@ -157,7 +159,7 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_all_mat.
     DELETE ADJACENT DUPLICATES FROM lt_all_mat.
 
-*   Build range for MATNR to avoid IN row type issues
+*   Build range for MATNR
     DATA lr_matnr TYPE RANGE OF mara-matnr.
     DATA ls_r TYPE LINE OF lr_matnr.
     LOOP AT lt_all_mat INTO lv_matnr.
