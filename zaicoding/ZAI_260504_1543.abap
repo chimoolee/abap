@@ -29,7 +29,7 @@ CLASS lcl_app DEFINITION FINAL.
              mtart  TYPE mara-mtart,
              maktx  TYPE makt-maktx,
              stock  TYPE mard-labst,
-             status TYPE char20,
+             status TYPE c LENGTH 20,
            END OF ty_main.
     TYPES ty_t_main TYPE STANDARD TABLE OF ty_main WITH EMPTY KEY.
 
@@ -44,7 +44,7 @@ CLASS lcl_app DEFINITION FINAL.
              comp_text    TYPE makt-maktx,
              header_matnr TYPE mara-matnr,
              header_text  TYPE makt-maktx,
-             remark       TYPE char20,
+             remark       TYPE c LENGTH 20,
            END OF ty_bom_only.
     TYPES ty_t_bom_only TYPE STANDARD TABLE OF ty_bom_only WITH EMPTY KEY.
 
@@ -102,7 +102,11 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_bom    TYPE ty_t_bom_only.
     DATA lo_alv    TYPE REF TO cl_salv_table.
 
-    lt_mov = get_mov_mat( i_werks = p_werks i_begda = p_begda i_endda = p_endda ).
+    lt_mov = get_mov_mat(
+      i_werks = p_werks
+      i_begda = p_begda
+      i_endda = p_endda ).
+
     lt_stock = get_stock_by_mat( i_werks = p_werks ).
 
     lt_all = lt_mov.
@@ -115,7 +119,10 @@ CLASS lcl_app IMPLEMENTATION.
 
     IF lt_all IS NOT INITIAL.
       lt_mm = get_mara_makt( it_matnr = lt_all ).
-      lt_main = build_main_list( it_mm = lt_mm it_mov = lt_mov it_stock = lt_stock ).
+      lt_main = build_main_list(
+        it_mm    = lt_mm
+        it_mov   = lt_mov
+        it_stock = lt_stock ).
 
       cl_salv_table=>factory(
         IMPORTING
@@ -129,7 +136,10 @@ CLASS lcl_app IMPLEMENTATION.
 
     lt_pairs = get_bom_pairs_for_fert( i_werks = p_werks ).
     IF lt_pairs IS NOT INITIAL.
-      lt_bom = build_bom_only( it_pairs = lt_pairs it_mov = lt_mov it_stock = lt_stock ).
+      lt_bom = build_bom_only(
+        it_pairs = lt_pairs
+        it_mov   = lt_mov
+        it_stock = lt_stock ).
       IF lt_bom IS NOT INITIAL.
         cl_salv_table=>factory(
           IMPORTING
@@ -150,8 +160,8 @@ CLASS lcl_app IMPLEMENTATION.
       INNER JOIN mkpf
         ON mkpf~mblnr = mseg~mblnr
        AND mkpf~mjahr = mseg~mjahr
-      WHERE mseg~werks = @i_werks
-        AND mkpf~budat BETWEEN @i_begda AND @i_endda
+     WHERE mseg~werks = @i_werks
+       AND mkpf~budat BETWEEN @i_begda AND @i_endda
       INTO TABLE @lt_mat.
     rt_matnr = lt_mat.
   ENDMETHOD.
@@ -161,9 +171,9 @@ CLASS lcl_app IMPLEMENTATION.
     SELECT mard~matnr,
            SUM( mard~labst ) AS stock
       FROM mard
-      WHERE mard~werks = @i_werks
-      GROUP BY mard~matnr
-      HAVING SUM( mard~labst ) <> 0
+     WHERE mard~werks = @i_werks
+     GROUP BY mard~matnr
+    HAVING SUM( mard~labst ) <> 0
       INTO TABLE @lt_stock.
     rt_stock = lt_stock.
   ENDMETHOD.
@@ -182,7 +192,7 @@ CLASS lcl_app IMPLEMENTATION.
       LEFT OUTER JOIN makt
         ON makt~matnr = mara~matnr
        AND makt~spras = @sy-langu
-      WHERE mara~matnr IN @it_matnr
+     WHERE mara~matnr IN @it_matnr
       INTO TABLE @lt_mm.
     rt_mm = lt_mm.
   ENDMETHOD.
@@ -206,7 +216,8 @@ CLASS lcl_app IMPLEMENTATION.
       ls_main-mtart = ls_mm-mtart.
       ls_main-maktx = ls_mm-maktx.
 
-      READ TABLE lt_stock_s INTO ls_stock WITH KEY matnr = ls_mm-matnr BINARY SEARCH.
+      READ TABLE lt_stock_s INTO ls_stock
+        WITH KEY matnr = ls_mm-matnr BINARY SEARCH.
       IF sy-subrc = 0.
         ls_main-stock = ls_stock-stock.
       ELSE.
@@ -238,15 +249,16 @@ CLASS lcl_app IMPLEMENTATION.
 
   METHOD get_bom_pairs_for_fert.
     DATA lt_pairs TYPE ty_t_bom_pair.
-    SELECT stko~matnr AS header,
+    SELECT mast~matnr AS header,
            stpo~idnrk AS comp
-      FROM stko
+      FROM mast
       INNER JOIN stpo
-        ON stpo~stlnr = stko~stlnr
+        ON stpo~stlnr = mast~stlnr
+       AND stpo~stlal = mast~stlal
       INNER JOIN mara
-        ON mara~matnr = stko~matnr
-      WHERE stko~werks = @i_werks
-        AND mara~mtart = 'FERT'
+        ON mara~matnr = mast~matnr
+     WHERE mast~werks = @i_werks
+       AND mara~mtart = 'FERT'
       INTO TABLE @lt_pairs.
     DELETE ADJACENT DUPLICATES FROM lt_pairs COMPARING header comp.
     rt_pairs = lt_pairs.
@@ -276,10 +288,10 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_comp_mm TYPE ty_t_mm.
     DATA lt_head_mm TYPE ty_t_mm.
     IF lt_comp IS NOT INITIAL.
-      lt_comp_mm = get_mara_makt( it_matnr = lt_comp ).
+      lt_comp_mm = get_mara_makt( it_matnr = lt_comp );
     ENDIF.
     IF lt_head IS NOT INITIAL.
-      lt_head_mm = get_mara_makt( it_matnr = lt_head ).
+      lt_head_mm = get_mara_makt( it_matnr = lt_head );
     ENDIF.
     SORT lt_comp_mm BY matnr.
     SORT lt_head_mm BY matnr.
