@@ -148,13 +148,14 @@ CLASS lcl_app IMPLEMENTATION.
         matnr   = ls_key-matnr
         werks   = ls_key-werks
         has_mov = COND #( WHEN line_exists(
-                            lt_h_mov[ matnr = ls_key-matnr
-                                      werks = ls_key-werks ] )
-                          THEN abap_true ELSE abap_false )
+                             lt_h_mov[ matnr = ls_key-matnr
+                                       werks = ls_key-werks ] )
+                          THEN abap_true
+                          ELSE abap_false )
         labst   = 0 ).
 
       READ TABLE lt_h_stock_val INTO DATA(ls_stock_v)
-        WITH TABLE KEY matnr = ls_key-matnr werks = ls_key-werks.
+           WITH TABLE KEY matnr = ls_key-matnr werks = ls_key-werks.
       IF sy-subrc = 0.
         ls_res-labst = ls_stock_v-labst.
       ENDIF.
@@ -179,10 +180,11 @@ CLASS lcl_app IMPLEMENTATION.
         has_mov  = COND #( WHEN line_exists(
                              lt_h_mov[ matnr = ls_fert-matnr
                                        werks = ls_fert-werks ] )
-                           THEN abap_true ELSE abap_false )
+                          THEN abap_true
+                          ELSE abap_false )
         labst    = 0 ).
       READ TABLE lt_h_stock_val INTO ls_stock_v
-        WITH TABLE KEY matnr = ls_fert-matnr werks = ls_fert-werks.
+           WITH TABLE KEY matnr = ls_fert-matnr werks = ls_fert-werks.
       IF sy-subrc = 0.
         ls_res_f-labst = ls_stock_v-labst.
       ENDIF.
@@ -235,7 +237,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     LOOP AT lt_result INTO ls_r2.
       READ TABLE lt_h_desc INTO DATA(ls_d)
-        WITH TABLE KEY matnr = ls_r2-matnr.
+           WITH TABLE KEY matnr = ls_r2-matnr.
       IF sy-subrc = 0.
         ls_r2-mtart = ls_d-mtart.
         ls_r2-matkl = ls_d-matkl.
