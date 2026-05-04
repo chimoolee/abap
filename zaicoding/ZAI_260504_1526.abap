@@ -1,8 +1,11 @@
 REPORT ZAI_260504_1526.
 
 PARAMETERS p_werks TYPE werks_d.
-PARAMETERS p_dfr  TYPE budat DEFAULT sy-datum - 30.
+PARAMETERS p_dfr  TYPE budat DEFAULT sy-datum.
 PARAMETERS p_dto  TYPE budat DEFAULT sy-datum.
+
+INITIALIZATION.
+  p_dfr = sy-datum - 30.
 
 CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
@@ -16,7 +19,7 @@ CLASS lcl_app DEFINITION FINAL.
              matkl  TYPE mara-matkl,
              meins  TYPE mara-meins,
              stock  TYPE mard-labst,
-             status TYPE char20,
+             status TYPE c LENGTH 20,
            END OF ty_item.
     TYPES ty_item_tab TYPE STANDARD TABLE OF ty_item WITH EMPTY KEY.
 
@@ -109,7 +112,7 @@ CLASS lcl_app IMPLEMENTATION.
     SELECT DISTINCT matdoc~matnr
       FROM matdoc
       WHERE ( @i_werks IS INITIAL OR matdoc~werks = @i_werks )
-        AND matdoc~budat BETWEEN @i_dfr AND @i_dto
+        AND matdoc~budat_mkpf BETWEEN @i_dfr AND @i_dto
         AND matdoc~matnr IS NOT NULL
       INTO TABLE @lt_mat.
 
@@ -261,7 +264,7 @@ CLASS lcl_app IMPLEMENTATION.
       FOR ALL ENTRIES IN @lt_no_stock
       WHERE matdoc~matnr = @lt_no_stock-table_line
         AND ( @i_werks IS INITIAL OR matdoc~werks = @i_werks )
-        AND matdoc~budat BETWEEN @i_dfr AND @i_dto
+        AND matdoc~budat_mkpf BETWEEN @i_dfr AND @i_dto
       INTO TABLE @DATA(lt_mov_exist).
 
     DATA lt_final TYPE ty_matnr_tab.
