@@ -1,7 +1,5 @@
 REPORT ZAI_260504_2023.
 
-TABLES mara.
-
 SELECT-OPTIONS:
   s_budat FOR sy-datum,
   s_werks FOR mseg-werks.
@@ -46,7 +44,7 @@ TYPES:
     matkl  TYPE mara-matkl,
     maktx  TYPE makt-maktx,
     labst  TYPE mard-labst,
-    status TYPE char20,
+    status TYPE c LENGTH 20,
   END OF ty_result,
   ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
@@ -64,10 +62,10 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA lo_alv TYPE REF TO cl_salv_table.
 
-    " 1) Movements by posting date and plant
+* 1) Movements by posting date and plant
     SELECT DISTINCT
-           mseg~matnr,
-           mseg~werks
+      mseg~matnr,
+      mseg~werks
       FROM mseg
       INNER JOIN mkpf
         ON mkpf~mblnr = mseg~mblnr
@@ -79,7 +77,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     lt_move_h = CORRESPONDING ty_t_move_h( lt_move ).
 
-    " 2) Current non-zero stock by plant
+* 2) Current non-zero stock by plant
     SELECT
       mard~matnr,
       mard~werks,
@@ -91,7 +89,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     lt_stock_h = CORRESPONDING ty_t_stock_h( lt_stock ).
 
-    " 3) Build material list from movements and stocks
+* 3) Build material list from movements and stocks
     LOOP AT lt_move ASSIGNING FIELD-SYMBOL(<ls_m>).
       APPEND <ls_m>-matnr TO lt_matnr.
     ENDLOOP.
@@ -101,31 +99,33 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_matnr BY table_line.
     DELETE ADJACENT DUPLICATES FROM lt_matnr COMPARING table_line.
 
-    " 4) Read material master and text
-    SELECT
-      mara~matnr,
-      mara~mtart,
-      mara~matkl,
-      makt~maktx
-      FROM mara
-      LEFT JOIN makt
-        ON makt~matnr = mara~matnr
-       AND makt~spras = @sy-langu
-      INTO TABLE @lt_mm
-      WHERE mara~matnr IN @lt_matnr.
+* 4) Read material master and text
+    IF lt_matnr IS NOT INITIAL.
+      SELECT
+        mara~matnr,
+        mara~mtart,
+        mara~matkl,
+        makt~maktx
+        FROM mara
+        LEFT JOIN makt
+          ON makt~matnr = mara~matnr
+         AND makt~spras = @sy-langu
+        INTO TABLE @lt_mm
+        WHERE mara~matnr IN @lt_matnr.
+    ENDIF.
 
     lt_mm_h = CORRESPONDING ty_t_mm_h( lt_mm ).
 
-    " 5) Build result for materials with movements
+* 5) Build result for materials with movements
     LOOP AT lt_move ASSIGNING <ls_m>.
       DATA(ls_res) = VALUE ty_result(
-         matnr = <ls_m>-matnr
-         werks = <ls_m>-werks
-         mtart = VALUE mara-mtart( )
-         matkl = VALUE mara-matkl( )
-         maktx = VALUE makt-maktx( )
-         labst = VALUE mard-labst( )
-         status = '입출고 있음' ).
+        matnr = <ls_m>-matnr
+        werks = <ls_m>-werks
+        mtart = VALUE mara-mtart( )
+        matkl = VALUE mara-matkl( )
+        maktx = VALUE makt-maktx( )
+        labst = VALUE mard-labst( )
+        status = '입출고 있음' ).
 
       READ TABLE lt_mm_h ASSIGNING FIELD-SYMBOL(<ls_mm>)
         WITH TABLE KEY matnr = <ls_m>-matnr.
@@ -146,19 +146,19 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_res TO lt_result.
     ENDLOOP.
 
-    " 6) Add stocks with no movements: status '재고만 있음'
+* 6) Add stocks with no movements: status '재고만 있음'
     LOOP AT lt_stock ASSIGNING <ls_s>.
       READ TABLE lt_move_h TRANSPORTING NO FIELDS
         WITH TABLE KEY matnr = <ls_s>-matnr werks = <ls_s>-werks.
       IF sy-subrc <> 0.
         DATA(ls_res2) = VALUE ty_result(
-           matnr = <ls_s>-matnr
-           werks = <ls_s>-werks
-           mtart = VALUE mara-mtart( )
-           matkl = VALUE mara-matkl( )
-           maktx = VALUE makt-maktx( )
-           labst = <ls_s>-labst
-           status = '재고만 있음' ).
+          matnr = <ls_s>-matnr
+          werks = <ls_s>-werks
+          mtart = VALUE mara-mtart( )
+          matkl = VALUE mara-matkl( )
+          maktx = VALUE makt-maktx( )
+          labst = <ls_s>-labst
+          status = '재고만 있음' ).
 
         READ TABLE lt_mm_h ASSIGNING <ls_mm>
           WITH TABLE KEY matnr = <ls_s>-matnr.
@@ -172,7 +172,7 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
 
-    " 7) Display
+* 7) Display
     TRY.
         cl_salv_table=>factory(
           IMPORTING
