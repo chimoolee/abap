@@ -49,7 +49,7 @@ CLASS lcl_app DEFINITION FINAL.
 
     TYPES: BEGIN OF ty_stpo_map,
              stlnr TYPE stpo-stlnr,
-             matnr TYPE stpo-matnr,
+             matnr TYPE mara-matnr,
            END OF ty_stpo_map.
     TYPES ty_t_stpo_map TYPE STANDARD TABLE OF ty_stpo_map WITH EMPTY KEY.
 ENDCLASS.
@@ -65,11 +65,11 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_stock_matnr TYPE ty_t_matnr.
     DATA lt_all_matnr   TYPE ty_t_matnr.
 
-    SELECT mseg~matnr
-      FROM mseg
-      WHERE mseg~werks = @p_werks
-        AND mseg~budat BETWEEN @p_dlo AND @p_dhi
-        AND mseg~matnr IS NOT NULL
+    SELECT matdoc~matnr
+      FROM matdoc
+      WHERE matdoc~werks = @p_werks
+        AND matdoc~budat BETWEEN @p_dlo AND @p_dhi
+        AND matdoc~matnr IS NOT NULL
       INTO TABLE @lt_mov_matnr.
     SORT lt_mov_matnr.
     DELETE ADJACENT DUPLICATES FROM lt_mov_matnr.
@@ -168,10 +168,10 @@ CLASS lcl_app IMPLEMENTATION.
       lt_stlnr = VALUE #( FOR ls IN lt_parents ( ls-stlnr ) ).
 
       DATA lt_comp_all TYPE ty_t_matnr.
-      SELECT stpo~matnr
+      SELECT stpo~idnrk
         FROM stpo
         WHERE stpo~stlnr IN @lt_stlnr
-          AND stpo~matnr IS NOT NULL
+          AND stpo~idnrk IS NOT NULL
         INTO TABLE @lt_comp_all.
       SORT lt_comp_all.
       DELETE ADJACENT DUPLICATES FROM lt_comp_all.
@@ -206,10 +206,10 @@ CLASS lcl_app IMPLEMENTATION.
         SORT lt_comp_tx BY matnr.
 
         DATA lt_map TYPE ty_t_stpo_map.
-        SELECT stpo~stlnr, stpo~matnr
+        SELECT stpo~stlnr, stpo~idnrk AS matnr
           FROM stpo
           WHERE stpo~stlnr IN @lt_stlnr
-            AND stpo~matnr IN @lt_bom_comp_only
+            AND stpo~idnrk IN @lt_bom_comp_only
           INTO TABLE @lt_map.
         SORT lt_map BY stlnr matnr.
 
