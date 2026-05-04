@@ -109,11 +109,14 @@ CLASS lcl_app IMPLEMENTATION.
   METHOD get_moved_materials.
     DATA lt_mat TYPE ty_matnr_tab.
 
-    SELECT DISTINCT matdoc~matnr
-      FROM matdoc
-      WHERE ( @i_werks IS INITIAL OR matdoc~werks = @i_werks )
-        AND matdoc~budat_mkpf BETWEEN @i_dfr AND @i_dto
-        AND matdoc~matnr IS NOT NULL
+    SELECT DISTINCT s~matnr
+      FROM mseg AS s
+      INNER JOIN mkpf AS h
+        ON h~mblnr = s~mblnr
+       AND h~mjahr = s~mjahr
+      WHERE ( @i_werks IS INITIAL OR s~werks = @i_werks )
+        AND h~budat BETWEEN @i_dfr AND @i_dto
+        AND s~matnr IS NOT NULL
       INTO TABLE @lt_mat.
 
     rt_matnr = lt_mat.
@@ -225,7 +228,7 @@ CLASS lcl_app IMPLEMENTATION.
       DATA lt_tmp TYPE ty_matnr_tab.
       LOOP AT lt_comp ASSIGNING FIELD-SYMBOL(<lv_c>).
         READ TABLE it_exclude WITH KEY table_line = <lv_c>
-          TRANSPORTING NO FIELDS.
+             TRANSPORTING NO FIELDS.
         IF sy-subrc <> 0.
           APPEND <lv_c> TO lt_tmp.
         ENDIF.
@@ -259,18 +262,21 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    SELECT DISTINCT matdoc~matnr
-      FROM matdoc
+    SELECT DISTINCT s~matnr
+      FROM mseg AS s
+      INNER JOIN mkpf AS h
+        ON h~mblnr = s~mblnr
+       AND h~mjahr = s~mjahr
       FOR ALL ENTRIES IN @lt_no_stock
-      WHERE matdoc~matnr = @lt_no_stock-table_line
-        AND ( @i_werks IS INITIAL OR matdoc~werks = @i_werks )
-        AND matdoc~budat_mkpf BETWEEN @i_dfr AND @i_dto
+      WHERE s~matnr = @lt_no_stock-table_line
+        AND ( @i_werks IS INITIAL OR s~werks = @i_werks )
+        AND h~budat BETWEEN @i_dfr AND @i_dto
       INTO TABLE @DATA(lt_mov_exist).
 
     DATA lt_final TYPE ty_matnr_tab.
     LOOP AT lt_no_stock ASSIGNING FIELD-SYMBOL(<lv_ns>).
       READ TABLE lt_mov_exist WITH KEY table_line = <lv_ns>
-        TRANSPORTING NO FIELDS.
+           TRANSPORTING NO FIELDS.
       IF sy-subrc <> 0.
         APPEND <lv_ns> TO lt_final.
       ENDIF.
