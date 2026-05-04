@@ -26,7 +26,7 @@ CLASS lcl_app DEFINITION FINAL.
     TYPES ty_t_main TYPE STANDARD TABLE OF ty_main WITH EMPTY KEY.
 
     TYPES: BEGIN OF ty_bom,
-             kind       TYPE char5,     "헤더/요소
+             kind       TYPE char5,
              matnr      TYPE mara-matnr,
              maktx      TYPE makt-maktx,
              werks      TYPE werks_d,
@@ -35,6 +35,19 @@ CLASS lcl_app DEFINITION FINAL.
              status     TYPE char20,
            END OF ty_bom.
     TYPES ty_t_bom TYPE STANDARD TABLE OF ty_bom WITH EMPTY KEY.
+
+    TYPES: BEGIN OF ty_makt,
+             matnr TYPE makt-matnr,
+             spras TYPE makt-spras,
+             maktx TYPE makt-maktx,
+           END OF ty_makt.
+    TYPES ty_t_makt TYPE STANDARD TABLE OF ty_makt WITH EMPTY KEY.
+
+    TYPES: BEGIN OF ty_mara_sel,
+             matnr TYPE mara-matnr,
+             mtart TYPE mara-mtart,
+           END OF ty_mara_sel.
+    TYPES ty_t_mara_sel TYPE STANDARD TABLE OF ty_mara_sel WITH EMPTY KEY.
 
     CLASS-METHODS select_movements
       IMPORTING i_werks TYPE werks_d
@@ -52,15 +65,15 @@ CLASS lcl_app DEFINITION FINAL.
       RETURNING VALUE(rt_comp) TYPE ty_t_matnr.
     CLASS-METHODS select_texts
       IMPORTING it_matnr TYPE ty_t_matnr
-      RETURNING VALUE(rt_texts) TYPE STANDARD TABLE OF makt WITH EMPTY KEY.
+      RETURNING VALUE(rt_texts) TYPE ty_t_makt.
     CLASS-METHODS select_mara
       IMPORTING it_matnr TYPE ty_t_matnr
-      RETURNING VALUE(rt_mara) TYPE STANDARD TABLE OF mara WITH EMPTY KEY.
+      RETURNING VALUE(rt_mara) TYPE ty_t_mara_sel.
     CLASS-METHODS build_main
       IMPORTING it_move  TYPE ty_t_matnr
                 it_stock TYPE ty_t_stock
-                it_texts TYPE STANDARD TABLE OF makt WITH EMPTY KEY
-                it_mara  TYPE STANDARD TABLE OF mara WITH EMPTY KEY
+                it_texts TYPE ty_t_makt
+                it_mara  TYPE ty_t_mara_sel
                 i_werks  TYPE werks_d
       RETURNING VALUE(rt_main) TYPE ty_t_main.
     CLASS-METHODS build_bom
@@ -68,8 +81,8 @@ CLASS lcl_app DEFINITION FINAL.
                 it_comp  TYPE ty_t_matnr
                 it_move  TYPE ty_t_matnr
                 it_stock TYPE ty_t_stock
-                it_texts TYPE STANDARD TABLE OF makt WITH EMPTY KEY
-                it_mara  TYPE STANDARD TABLE OF mara WITH EMPTY KEY
+                it_texts TYPE ty_t_makt
+                it_mara  TYPE ty_t_mara_sel
                 i_werks  TYPE werks_d
       RETURNING VALUE(rt_bom) TYPE ty_t_bom.
     CLASS-METHODS show_alv
@@ -89,10 +102,9 @@ CLASS lcl_app IMPLEMENTATION.
       lv_end = lv_tmp.
     ENDIF.
 
-    DATA(lt_move) = select_movements( i_werks = p_werks i_beg = lv_beg i_end = lv_end ).
+    DATA(lt_move)  = select_movements( i_werks = p_werks i_beg = lv_beg i_end = lv_end ).
     DATA(lt_stock) = select_stock( i_werks = p_werks ).
 
-    "Collect all materials needed for text/type lookup
     DATA lt_keys TYPE ty_t_matnr.
     APPEND LINES OF lt_move TO lt_keys.
     LOOP AT lt_stock ASSIGNING FIELD-SYMBOL(<s>).
@@ -109,7 +121,6 @@ CLASS lcl_app IMPLEMENTATION.
     APPEND LINES OF lt_bom_hdr  TO lt_keys.
     APPEND LINES OF lt_bom_comp TO lt_keys.
 
-    "Unique-ify lt_keys (simple dedup)
     DATA lt_all TYPE ty_t_matnr.
     LOOP AT lt_keys ASSIGNING FIELD-SYMBOL(<k>).
       IF line_exists( lt_all[ table_line = <k> ] ) IS INITIAL.
@@ -170,32 +181,28 @@ CLASS lcl_app IMPLEMENTATION.
 
   METHOD select_bom_headers.
     DATA lt_hdr TYPE ty_t_matnr.
-    SELECT DISTINCT sk~matnr
-      FROM stko AS sk
-      WHERE sk~stlty = 'M'
-        AND sk~werks = @i_werks
-        AND sk~matnr IS NOT NULL
+    SELECT DISTINCT ma~matnr
+      FROM mast AS ma
+      WHERE ma~werks = @i_werks
       INTO TABLE @lt_hdr.
     rt_hdr = lt_hdr.
   ENDMETHOD.
 
   METHOD select_bom_components.
     DATA lt_comp TYPE ty_t_matnr.
-    SELECT DISTINCT sp~idnrk
-      FROM stpo AS sp
-      INNER JOIN stko AS sk
-        ON  sp~stlty = sk~stlty
-        AND sp~stlnr = sk~stlnr
-        AND sp~stlal = sk~stlal
-      WHERE sk~stlty = 'M'
-        AND sk~werks = @i_werks
-        AND sp~idnrk IS NOT NULL
+    SELECT DISTINCT po~idnrk
+      FROM mast AS ma
+      INNER JOIN stpo AS po
+        ON po~stlnr = ma~stlnr
+       AND po~stlal = ma~stlal
+      WHERE ma~werks = @i_werks
+        AND po~idnrk IS NOT NULL
       INTO TABLE @lt_comp.
     rt_comp = lt_comp.
   ENDMETHOD.
 
   METHOD select_texts.
-    DATA lt_texts TYPE STANDARD TABLE OF makt WITH EMPTY KEY.
+    DATA lt_texts TYPE ty_t_makt.
     IF it_matnr IS INITIAL.
       rt_texts = lt_texts.
       RETURN.
@@ -210,7 +217,7 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD select_mara.
-    DATA lt_mara TYPE STANDARD TABLE OF mara WITH EMPTY KEY.
+    DATA lt_mara TYPE ty_t_mara_sel.
     IF it_matnr IS INITIAL.
       rt_mara = lt_mara.
       RETURN.
@@ -225,4 +232,105 @@ CLASS lcl_app IMPLEMENTATION.
 
   METHOD build_main.
     DATA lt_main TYPE ty_t_main.
-    DATA
+
+    DATA lv_stat_move TYPE char20 VALUE '입출고 있음'.
+    DATA lv_stat_stk  TYPE char20 VALUE '재고만 있음'.
+
+    DATA ls_main TYPE ty_main.
+
+    DATA lt_all TYPE ty_t_matnr.
+    APPEND LINES OF it_move TO lt_all.
+    LOOP AT it_stock ASSIGNING FIELD-SYMBOL(<st>).
+      IF <st>-qty NE 0.
+        IF line_exists( lt_all[ table_line = <st>-matnr ] ) IS INITIAL.
+          APPEND <st>-matnr TO lt_all.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+
+    LOOP AT lt_all ASSIGNING FIELD-SYMBOL(<mkey>).
+      CLEAR ls_main.
+      ls_main-matnr = <mkey>.
+      ls_main-werks = i_werks.
+
+      READ TABLE it_texts ASSIGNING FIELD-SYMBOL(<tx>)
+        WITH KEY matnr = <mkey> spras = sy-langu.
+      IF sy-subrc = 0.
+        ls_main-maktx = <tx>-maktx.
+      ENDIF.
+
+      READ TABLE it_mara ASSIGNING FIELD-SYMBOL(<ma>)
+        WITH KEY matnr = <mkey>.
+      IF sy-subrc = 0.
+        ls_main-mtart = <ma>-mtart.
+      ENDIF.
+
+      READ TABLE it_stock ASSIGNING FIELD-SYMBOL(<st2>)
+        WITH KEY matnr = <mkey>.
+      IF sy-subrc = 0.
+        ls_main-stock_qty = <st2>-qty.
+      ELSE.
+        ls_main-stock_qty = 0.
+      ENDIF.
+
+      IF line_exists( it_move[ table_line = <mkey> ] ).
+        ls_main-status = lv_stat_move.
+      ELSEIF ls_main-stock_qty NE 0.
+        ls_main-status = lv_stat_stk.
+      ELSE.
+        CONTINUE.
+      ENDIF.
+
+      APPEND ls_main TO lt_main.
+    ENDLOOP.
+
+    rt_main = lt_main.
+  ENDMETHOD.
+
+  METHOD build_bom.
+    DATA lt_bom TYPE ty_t_bom.
+
+    DATA lv_stat_move TYPE char20 VALUE '입출고 있음'.
+    DATA lv_stat_stk  TYPE char20 VALUE '재고만 있음'.
+    DATA lv_stat_bom  TYPE char20 VALUE 'BOM 만 있음'.
+
+    DATA ls_bom TYPE ty_bom.
+
+    LOOP AT it_hdr ASSIGNING FIELD-SYMBOL(<h>).
+      CLEAR ls_bom.
+      ls_bom-kind  = '헤더'.
+      ls_bom-matnr = <h>.
+      ls_bom-werks = i_werks.
+
+      READ TABLE it_texts ASSIGNING FIELD-SYMBOL(<txh>)
+        WITH KEY matnr = <h> spras = sy-langu.
+      IF sy-subrc = 0.
+        ls_bom-maktx = <txh>-maktx.
+      ENDIF.
+
+      READ TABLE it_mara ASSIGNING FIELD-SYMBOL(<mah>)
+        WITH KEY matnr = <h>.
+      IF sy-subrc = 0.
+        ls_bom-mtart = <mah>-mtart.
+      ENDIF.
+
+      READ TABLE it_stock ASSIGNING FIELD-SYMBOL(<sth>)
+        WITH KEY matnr = <h>.
+      IF sy-subrc = 0.
+        ls_bom-stock_qty = <sth>-qty.
+      ELSE.
+        ls_bom-stock_qty = 0.
+      ENDIF.
+
+      IF line_exists( it_move[ table_line = <h> ] ).
+        ls_bom-status = lv_stat_move.
+      ELSEIF ls_bom-stock_qty NE 0.
+        ls_bom-status = lv_stat_stk.
+      ELSE.
+        ls_bom-status = lv_stat_bom.
+      ENDIF.
+
+      APPEND ls_bom TO lt_bom.
+    ENDLOOP.
+
+    LOOP AT it_comp ASSIGNING FIELD-SYMBOL
