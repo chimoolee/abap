@@ -23,12 +23,12 @@ CLASS lcl_app IMPLEMENTATION.
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
-    DATA lt_result     TYPE ty_t_result.
-    DATA lt_mv_matnr   TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
-    DATA lt_stk_matnr  TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
-    DATA lt_all_matnr  TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_result    TYPE ty_t_result.
+    DATA lt_mv_matnr  TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_stk_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_all_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
-    " 자재문서가 있는 자재 수집 (MKPF~BUDAT, MSEG~WERKS, 선택적 MATNR)
+    " 자재문서가 있는 자재 수집 (MKPF~BUDAT, MSEG~WERKS)
     IF s_matnr[] IS INITIAL.
       SELECT DISTINCT mseg~matnr
         FROM mseg
@@ -66,7 +66,7 @@ CLASS lcl_app IMPLEMENTATION.
           AND mard~matnr IN @s_matnr.
     ENDIF.
 
-    " 두 집합 합집합
+    " 합집합
     APPEND LINES OF lt_mv_matnr TO lt_all_matnr.
     APPEND LINES OF lt_stk_matnr TO lt_all_matnr.
     SORT lt_all_matnr.
@@ -87,7 +87,7 @@ CLASS lcl_app IMPLEMENTATION.
         WHERE mara~matnr IN @lt_all_matnr.
     ENDIF.
 
-    " 상태 결정: 입출고가 있으면 '입출고 있음', 없고 재고만 있으면 '재고만 있음'
+    " 상태 결정
     IF lt_result IS NOT INITIAL.
       SORT lt_mv_matnr.
       SORT lt_stk_matnr.
