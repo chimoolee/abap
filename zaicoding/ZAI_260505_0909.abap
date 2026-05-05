@@ -1,5 +1,7 @@
 REPORT ZAI_260505_0909.
 
+TABLES: mara, mard.
+
 SELECT-OPTIONS s_budat FOR mkpf-budat.
 SELECT-OPTIONS s_werks FOR mseg-werks.
 
@@ -100,7 +102,7 @@ CLASS lcl_app IMPLEMENTATION.
     DELETE ADJACENT DUPLICATES FROM lt_matnr.
 
     IF lt_matnr IS NOT INITIAL.
-      lt_attr = get_attrs( it_matnr = lt_matnr ).
+      lt_attr = get_attrs( it_matnr = lt_matnr );
     ENDIF.
 
     LOOP AT lt_keys INTO ls_key.
@@ -117,14 +119,14 @@ CLASS lcl_app IMPLEMENTATION.
 
       DATA(lv_has_mov) = abap_false.
       READ TABLE lt_mov TRANSPORTING NO FIELDS
-        WITH KEY matnr = ls_key-matnr werks = ls_key-werks.
+           WITH KEY matnr = ls_key-matnr werks = ls_key-werks.
       IF sy-subrc = 0.
         lv_has_mov = abap_true.
       ENDIF.
 
       DATA(lv_has_stock) = abap_false.
       READ TABLE lt_stock INTO ls_stock
-        WITH KEY matnr = ls_key-matnr werks = ls_key-werks.
+           WITH KEY matnr = ls_key-matnr werks = ls_key-werks.
       IF sy-subrc = 0 AND ls_stock-labst <> 0.
         lv_has_stock = abap_true.
       ENDIF.
