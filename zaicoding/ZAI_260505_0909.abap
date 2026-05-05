@@ -119,14 +119,14 @@ CLASS lcl_app IMPLEMENTATION.
 
       DATA(lv_has_mov) = abap_false.
       READ TABLE lt_mov TRANSPORTING NO FIELDS
-           WITH KEY matnr = ls_key-matnr werks = ls_key-werks.
+        WITH KEY matnr = ls_key-matnr werks = ls_key-werks.
       IF sy-subrc = 0.
         lv_has_mov = abap_true.
       ENDIF.
 
       DATA(lv_has_stock) = abap_false.
       READ TABLE lt_stock INTO ls_stock
-           WITH KEY matnr = ls_key-matnr werks = ls_key-werks.
+        WITH KEY matnr = ls_key-matnr werks = ls_key-werks.
       IF sy-subrc = 0 AND ls_stock-labst <> 0.
         lv_has_stock = abap_true.
       ENDIF.
