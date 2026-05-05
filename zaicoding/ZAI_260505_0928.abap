@@ -58,18 +58,18 @@ CLASS lcl_app IMPLEMENTATION.
       END OF ty_stock_agg,
       ty_t_stock_agg TYPE STANDARD TABLE OF ty_stock_agg WITH EMPTY KEY.
 
-    DATA lt_keys    TYPE ty_t_key.
-    DATA ls_key     TYPE ty_key.
-    DATA lt_attr    TYPE ty_t_attr.
-    DATA ls_attr    TYPE ty_attr.
-    DATA lt_result  TYPE ty_t_result.
-    DATA ls_result  TYPE ty_result.
-    DATA lt_matnr   TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
-    DATA lt_mov_raw TYPE ty_t_mov_raw.
-    DATA lt_stock_agg TYPE ty_t_stock_agg.
-    DATA lo_alv TYPE REF TO cl_salv_table.
+    DATA lt_keys       TYPE ty_t_key.
+    DATA ls_key        TYPE ty_key.
+    DATA lt_attr       TYPE ty_t_attr.
+    DATA ls_attr       TYPE ty_attr.
+    DATA lt_result     TYPE ty_t_result.
+    DATA ls_result     TYPE ty_result.
+    DATA lt_matnr      TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_mov_raw    TYPE ty_t_mov_raw.
+    DATA lt_stock_agg  TYPE ty_t_stock_agg.
+    DATA lo_alv        TYPE REF TO cl_salv_table.
 
-    " 1) Materials with movement (MKPF/MSEG) per plant/date (respect optional MATNR)
+    " 1) Materials with movement per plant/date
     IF s_matnr[] IS INITIAL.
       SELECT DISTINCT
         mseg~matnr,
@@ -96,22 +96,19 @@ CLASS lcl_app IMPLEMENTATION.
     ENDIF.
 
     LOOP AT lt_mov_raw INTO DATA(ls_mov_raw).
-      CLEAR ls_key.
-      ls_key-matnr = ls_mov_raw-matnr.
-      ls_key-werks = ls_mov_raw-werks.
-      ls_key-has_mov = abap_true.
-      READ TABLE lt_keys INTO DATA(ls_key_exist)
-        WITH TABLE KEY matnr = ls_key-matnr werks = ls_key-werks.
-      IF sy-subrc = 0.
-        " keep existing stock if any, set movement flag
-        ls_key = ls_key_exist.
-        ls_key-has_mov = abap_true.
-        DELETE lt_keys FROM TABLE VALUE ty_t_key( ( ls_key_exist ) ).
+      READ TABLE lt_keys INTO ls_key
+        WITH TABLE KEY matnr = ls_mov_raw-matnr werks = ls_mov_raw-werks.
+      IF sy-subrc <> 0.
+        CLEAR ls_key.
+        ls_key-matnr = ls_mov_raw-matnr.
+        ls_key-werks = ls_mov_raw-werks.
       ENDIF.
+      ls_key-has_mov = abap_true.
+      DELETE TABLE lt_keys FROM ls_key.
       INSERT ls_key INTO TABLE lt_keys.
     ENDLOOP.
 
-    " 2) Materials with current stock > 0 per plant (respect optional MATNR)
+    " 2) Materials with current stock > 0 per plant
     IF s_matnr[] IS INITIAL.
       SELECT
         mard~matnr,
@@ -138,22 +135,17 @@ CLASS lcl_app IMPLEMENTATION.
     LOOP AT lt_stock_agg INTO DATA(ls_stock_agg).
       READ TABLE lt_keys INTO ls_key
         WITH TABLE KEY matnr = ls_stock_agg-matnr werks = ls_stock_agg-werks.
-      IF sy-subrc = 0.
-        " update stock on existing entry
-        DELETE lt_keys FROM TABLE VALUE ty_t_key( ( ls_key ) ).
-        ls_key-stock_qty = ls_stock_agg-stock_qty.
-        INSERT ls_key INTO TABLE lt_keys.
-      ELSE.
+      IF sy-subrc <> 0.
         CLEAR ls_key.
         ls_key-matnr = ls_stock_agg-matnr.
         ls_key-werks = ls_stock_agg-werks.
         ls_key-has_mov = abap_false.
-        ls_key-stock_qty = ls_stock_agg-stock_qty.
-        INSERT ls_key INTO TABLE lt_keys.
       ENDIF.
+      ls_key-stock_qty = ls_stock_agg-stock_qty.
+      DELETE TABLE lt_keys FROM ls_key.
+      INSERT ls_key INTO TABLE lt_keys.
     ENDLOOP.
 
-    " If nothing found, show empty ALV
     IF lt_keys IS INITIAL.
       cl_salv_table=>factory(
         IMPORTING r_salv_table = lo_alv
