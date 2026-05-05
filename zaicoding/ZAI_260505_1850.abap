@@ -65,8 +65,8 @@ CLASS lcl_app IMPLEMENTATION.
     " Movements by posting date and plant
     IF s_budat[] IS INITIAL AND s_werks[] IS INITIAL.
       SELECT DISTINCT
-        mseg~matnr,
-        mseg~werks
+             mseg~matnr,
+             mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
@@ -74,8 +74,8 @@ CLASS lcl_app IMPLEMENTATION.
         INTO TABLE @lt_mov.
     ELSEIF s_budat[] IS INITIAL AND s_werks[] IS NOT INITIAL.
       SELECT DISTINCT
-        mseg~matnr,
-        mseg~werks
+             mseg~matnr,
+             mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
@@ -84,8 +84,8 @@ CLASS lcl_app IMPLEMENTATION.
         WHERE mseg~werks IN @s_werks.
     ELSEIF s_budat[] IS NOT INITIAL AND s_werks[] IS INITIAL.
       SELECT DISTINCT
-        mseg~matnr,
-        mseg~werks
+             mseg~matnr,
+             mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
@@ -94,8 +94,8 @@ CLASS lcl_app IMPLEMENTATION.
         WHERE mkpf~budat IN @s_budat.
     ELSE.
       SELECT DISTINCT
-        mseg~matnr,
-        mseg~werks
+             mseg~matnr,
+             mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
@@ -108,18 +108,18 @@ CLASS lcl_app IMPLEMENTATION.
     " Current stock by plant: only non-zero totals
     IF s_werks[] IS INITIAL.
       SELECT
-        mard~matnr,
-        mard~werks,
-        SUM( mard~labst ) AS qty
+             mard~matnr,
+             mard~werks,
+             SUM( mard~labst ) AS qty
         FROM mard
         GROUP BY mard~matnr, mard~werks
         HAVING SUM( mard~labst ) > 0
         INTO TABLE @lt_stk.
     ELSE.
       SELECT
-        mard~matnr,
-        mard~werks,
-        SUM( mard~labst ) AS qty
+             mard~matnr,
+             mard~werks,
+             SUM( mard~labst ) AS qty
         FROM mard
         WHERE mard~werks IN @s_werks
         GROUP BY mard~matnr, mard~werks
@@ -128,11 +128,11 @@ CLASS lcl_app IMPLEMENTATION.
     ENDIF.
 
     " Hash helpers
-    TYPES: ty_h_mov TYPE HASHED TABLE OF ty_mov WITH UNIQUE KEY matnr werks.
+    TYPES ty_h_mov TYPE HASHED TABLE OF ty_mov WITH UNIQUE KEY matnr werks.
     DATA lt_h_mov TYPE ty_h_mov.
     lt_h_mov = lt_mov.
 
-    TYPES: ty_h_stk TYPE HASHED TABLE OF ty_stk WITH UNIQUE KEY matnr werks.
+    TYPES ty_h_stk TYPE HASHED TABLE OF ty_stk WITH UNIQUE KEY matnr werks.
     DATA lt_h_stk TYPE ty_h_stk.
     lt_h_stk = lt_stk.
 
@@ -144,7 +144,8 @@ CLASS lcl_app IMPLEMENTATION.
       CLEAR ls_comb.
       ls_comb-matnr = ls_mov-matnr.
       ls_comb-werks = ls_mov-werks.
-      READ TABLE lt_h_stk INTO ls_stk WITH TABLE KEY matnr = ls_mov-matnr werks = ls_mov-werks.
+      READ TABLE lt_h_stk INTO ls_stk
+        WITH TABLE KEY matnr = ls_mov-matnr werks = ls_mov-werks.
       IF sy-subrc = 0.
         ls_comb-qty = ls_stk-qty.
       ELSE.
@@ -156,12 +157,14 @@ CLASS lcl_app IMPLEMENTATION.
 
     " Add pure stock-only keys (status '재고만 있음')
     LOOP AT lt_stk INTO ls_stk.
-      READ TABLE lt_h_mov WITH TABLE KEY matnr = ls_stk-matnr werks = ls_stk-werks TRANSPORTING NO FIELDS.
+      READ TABLE lt_h_mov
+        WITH TABLE KEY matnr = ls_stk-matnr werks = ls_stk-werks
+        TRANSPORTING NO FIELDS.
       IF sy-subrc <> 0.
         CLEAR ls_comb.
-        ls_comb-matnr = ls_stk-matnr.
-        ls_comb-werks = ls_stk-werks.
-        ls_comb-qty   = ls_stk-qty.
+        ls_comb-matnr  = ls_stk-matnr.
+        ls_comb-werks  = ls_stk-werks.
+        ls_comb-qty    = ls_stk-qty.
         ls_comb-status = '재고만 있음'.
         APPEND ls_comb TO lt_comb.
       ENDIF.
@@ -175,4 +178,42 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_matnr BY table_line.
     DELETE ADJACENT DUPLICATES FROM lt_matnr COMPARING table_line.
 
-    " Fetch material
+    " Fetch material master and text
+    IF lt_matnr IS NOT INITIAL.
+      SELECT
+             mara~matnr,
+             mara~mtart,
+             mara~matkl,
+             makt~maktx
+        FROM mara
+        LEFT JOIN makt
+          ON makt~matnr = mara~matnr
+         AND makt~spras = @sy-langu
+        INTO TABLE @lt_matinfo
+        WHERE mara~matnr IN @lt_matnr.
+    ENDIF.
+
+    " Hash material info
+    TYPES ty_h_matinfo TYPE HASHED TABLE OF ty_matinfo WITH UNIQUE KEY matnr.
+    DATA lt_h_matinfo TYPE ty_h_matinfo.
+    lt_h_matinfo = lt_matinfo.
+
+    " Build final result
+    DATA ls_info TYPE ty_matinfo.
+    DATA ls_res  TYPE ty_result.
+
+    LOOP AT lt_comb INTO ls_comb.
+      CLEAR: ls_info, ls_res.
+      READ TABLE lt_h_matinfo INTO ls_info WITH TABLE KEY matnr = ls_comb-matnr.
+      ls_res-matnr = ls_comb-matnr.
+      ls_res-mtart = ls_info-mtart.
+      ls_res-matkl = ls_info-matkl.
+      ls_res-maktx = ls_info-maktx.
+      ls_res-werks = ls_comb-werks.
+      ls_res-qty   = ls_comb-qty.
+      ls_res-stat  = ls_comb-status.
+      APPEND ls_res TO lt_result.
+    ENDLOOP.
+
+    " Display ALV
+    DATA lo_al
