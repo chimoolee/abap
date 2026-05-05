@@ -1,7 +1,5 @@
 REPORT ZAI_260505_2008.
 
-TABLES mara.
-
 SELECT-OPTIONS s_budat FOR sy-datum.
 SELECT-OPTIONS s_werks FOR t001w-werks.
 
@@ -56,31 +54,37 @@ CLASS lcl_app IMPLEMENTATION.
 
     " Materials with movements by posting date and plant
     SELECT DISTINCT
-           mseg~matnr,
-           mseg~werks
+      mseg~matnr,
+      mseg~werks
       FROM mseg
       INNER JOIN mkpf
-              ON mkpf~mblnr = mseg~mblnr
-             AND mkpf~mjahr = mseg~mjahr
+        ON mkpf~mblnr = mseg~mblnr
+       AND mkpf~mjahr = mseg~mjahr
       INTO TABLE @lt_move
       WHERE ( @s_budat[] IS INITIAL OR mkpf~budat IN @s_budat )
         AND ( @s_werks[] IS INITIAL OR mseg~werks IN @s_werks )
         AND mseg~matnr <> ''.
 
+    SORT lt_move BY matnr werks.
+
     " Materials with non-zero current stock by plant
     SELECT
-           mard~matnr,
-           mard~werks,
-           SUM( mard~labst ) AS stock_qty
+      mard~matnr,
+      mard~werks,
+      SUM( mard~labst ) AS stock_qty
       FROM mard
       WHERE ( @s_werks[] IS INITIAL OR mard~werks IN @s_werks )
       GROUP BY mard~matnr, mard~werks
       HAVING SUM( mard~labst ) > 0
       INTO TABLE @lt_stock.
 
+    SORT lt_stock BY matnr werks.
+
     " Union keys: movements + stock>0
     lt_key = lt_move.
-    APPEND LINES OF lt_stock TO lt_key.
+    LOOP AT lt_stock INTO DATA(ls_stk).
+      APPEND VALUE ty_key( matnr = ls_stk-matnr werks = ls_stk-werks ) TO lt_key.
+    ENDLOOP.
     SORT lt_key BY matnr werks.
     DELETE ADJACENT DUPLICATES FROM lt_key COMPARING matnr werks.
 
@@ -97,16 +101,17 @@ CLASS lcl_app IMPLEMENTATION.
     " Read material master/texts
     IF lt_matnr IS NOT INITIAL.
       SELECT
-             mara~matnr,
-             mara~mtart,
-             mara~matkl,
-             makt~maktx
+        mara~matnr,
+        mara~mtart,
+        mara~matkl,
+        makt~maktx
         FROM mara
         LEFT JOIN makt
-               ON makt~matnr = mara~matnr
-              AND makt~spras = @sy-langu
+          ON makt~matnr = mara~matnr
+         AND makt~spras = @sy-langu
         INTO TABLE @lt_text
         WHERE mara~matnr IN @lt_matnr.
+      SORT lt_text BY matnr.
     ENDIF.
 
     " Assemble result with status
@@ -123,7 +128,7 @@ CLASS lcl_app IMPLEMENTATION.
         ls_res-maktx = ls_text-maktx.
       ENDIF.
 
-      READ TABLE lt_stock INTO DATA(ls_stk)
+      READ TABLE lt_stock INTO ls_stk
         WITH KEY matnr = ls_key-matnr werks = ls_key-werks BINARY SEARCH.
       IF sy-subrc = 0.
         ls_res-stock_qty = ls_stk-stock_qty.
