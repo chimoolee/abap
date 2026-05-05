@@ -1,9 +1,7 @@
 REPORT ZAI_260505_2013.
 
-TABLES mara.
-
 SELECT-OPTIONS: s_budat FOR mkpf~budat,
-                 s_werks FOR t001w-werks.
+                s_werks FOR t001w-werks.
 
 CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
@@ -103,7 +101,7 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_matnr BY table_line.
     DELETE ADJACENT DUPLICATES FROM lt_matnr COMPARING table_line.
 
-    lt_mm = get_mm_data( lt_matnr ).
+    lt_mm = get_mm_data( it_matnr = lt_matnr ).
 
     DATA lt_mm_hash TYPE HASHED TABLE OF ty_mm WITH UNIQUE KEY matnr.
     lt_mm_hash = lt_mm.
@@ -134,7 +132,7 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
 
       READ TABLE lt_move_hash WITH KEY matnr = ls_key-matnr werks = ls_key-werks
-           TRANSPORTING NO FIELDS.
+        TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         ls_result-status = '입출고 있음'.
       ELSE.
