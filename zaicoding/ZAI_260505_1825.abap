@@ -1,5 +1,7 @@
 REPORT ZAI_260505_1825.
 
+TABLES mara.
+
 SELECT-OPTIONS s_budat FOR mkpf-budat NO-EXTENSION.
 SELECT-OPTIONS s_werks FOR mseg-werks NO-EXTENSION.
 
@@ -26,12 +28,10 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA lt_result TYPE ty_t_result.
 
-    " Material lists
     DATA lt_mov_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
     DATA lt_stk_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
     DATA lt_matnr     TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
-    " 1) Materials with goods movements by posting date and plant
     SELECT DISTINCT
       mseg~matnr
       FROM mseg
@@ -42,7 +42,6 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE mkpf~budat IN @s_budat
         AND mseg~werks IN @s_werks.
 
-    " 2) Materials with non-zero current stock by plant
     SELECT DISTINCT
       mard~matnr
       FROM mard
@@ -50,13 +49,11 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE mard~werks IN @s_werks
         AND mard~labst <> 0.
 
-    " Union of movement materials and stock materials
     APPEND LINES OF lt_mov_matnr TO lt_matnr.
     APPEND LINES OF lt_stk_matnr TO lt_matnr.
     SORT lt_matnr.
     DELETE ADJACENT DUPLICATES FROM lt_matnr.
 
-    " Prepare material master data with text
     TYPES:
       BEGIN OF ty_sel,
         matnr TYPE mara-matnr,
@@ -108,7 +105,6 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_result TO lt_result.
     ENDLOOP.
 
-    " Display ALV
     DATA lo_alv TYPE REF TO cl_salv_table.
     cl_salv_table=>factory(
       IMPORTING
