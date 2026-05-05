@@ -1,5 +1,7 @@
 REPORT ZAI_260505_2008.
 
+TABLES mara.
+
 SELECT-OPTIONS s_budat FOR sy-datum.
 SELECT-OPTIONS s_werks FOR t001w-werks.
 
@@ -52,7 +54,6 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_text   TYPE ty_t_text.
     DATA lt_result TYPE ty_t_result.
 
-    " Materials with movements by posting date and plant
     SELECT DISTINCT
       mseg~matnr,
       mseg~werks
@@ -67,7 +68,6 @@ CLASS lcl_app IMPLEMENTATION.
 
     SORT lt_move BY matnr werks.
 
-    " Materials with non-zero current stock by plant
     SELECT
       mard~matnr,
       mard~werks,
@@ -80,7 +80,6 @@ CLASS lcl_app IMPLEMENTATION.
 
     SORT lt_stock BY matnr werks.
 
-    " Union keys: movements + stock>0
     lt_key = lt_move.
     LOOP AT lt_stock INTO DATA(ls_stk).
       APPEND VALUE ty_key( matnr = ls_stk-matnr werks = ls_stk-werks ) TO lt_key.
@@ -88,7 +87,6 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_key BY matnr werks.
     DELETE ADJACENT DUPLICATES FROM lt_key COMPARING matnr werks.
 
-    " Build material list for text selection
     DATA lt_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
     DATA lv_prev TYPE mara-matnr.
     LOOP AT lt_key INTO DATA(ls_key).
@@ -98,7 +96,6 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
 
-    " Read material master/texts
     IF lt_matnr IS NOT INITIAL.
       SELECT
         mara~matnr,
@@ -114,7 +111,6 @@ CLASS lcl_app IMPLEMENTATION.
       SORT lt_text BY matnr.
     ENDIF.
 
-    " Assemble result with status
     LOOP AT lt_key INTO ls_key.
       DATA(ls_res) = VALUE ty_result(
         matnr = ls_key-matnr
@@ -129,7 +125,8 @@ CLASS lcl_app IMPLEMENTATION.
       ENDIF.
 
       READ TABLE lt_stock INTO ls_stk
-        WITH KEY matnr = ls_key-matnr werks = ls_key-werks BINARY SEARCH.
+        WITH KEY matnr = ls_key-matnr werks = ls_key-werks
+        BINARY SEARCH.
       IF sy-subrc = 0.
         ls_res-stock_qty = ls_stk-stock_qty.
       ELSE.
@@ -149,7 +146,6 @@ CLASS lcl_app IMPLEMENTATION.
       APPEND ls_res TO lt_result.
     ENDLOOP.
 
-    " Display ALV
     DATA lo_alv TYPE REF TO cl_salv_table.
     cl_salv_table=>factory(
       IMPORTING
