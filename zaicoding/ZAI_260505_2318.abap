@@ -19,7 +19,7 @@ CLASS lcl_app IMPLEMENTATION.
         mtart  TYPE mara-mtart,
         matkl  TYPE mara-matkl,
         maktx  TYPE makt-maktx,
-        status TYPE char20,
+        status TYPE c LENGTH 20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
@@ -93,19 +93,22 @@ CLASS lcl_app IMPLEMENTATION.
       SORT lt_stk_matnr.
       DATA lv_has_mv  TYPE abap_bool.
       DATA lv_has_stk TYPE abap_bool.
+
       LOOP AT lt_result ASSIGNING FIELD-SYMBOL(<ls_res>).
         READ TABLE lt_mv_matnr WITH KEY table_line = <ls_res>-matnr
           TRANSPORTING NO FIELDS BINARY SEARCH.
         lv_has_mv = xsdbool( sy-subrc = 0 ).
+
         READ TABLE lt_stk_matnr WITH KEY table_line = <ls_res>-matnr
           TRANSPORTING NO FIELDS BINARY SEARCH.
         lv_has_stk = xsdbool( sy-subrc = 0 ).
+
         IF lv_has_mv = abap_true.
           <ls_res>-status = '입출고 있음'.
         ELSEIF lv_has_stk = abap_true.
           <ls_res>-status = '재고만 있음'.
         ELSE.
-          <ls_res>-status = ''.
+          CLEAR <ls_res>-status.
         ENDIF.
       ENDLOOP.
     ENDIF.
