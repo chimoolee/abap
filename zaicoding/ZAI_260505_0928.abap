@@ -15,9 +15,9 @@ CLASS lcl_app IMPLEMENTATION.
   METHOD run.
     TYPES:
       BEGIN OF ty_key,
-        matnr TYPE mara-matnr,
-        werks TYPE mseg-werks,
-        has_mov TYPE abap_bool,
+        matnr     TYPE mara-matnr,
+        werks     TYPE mseg-werks,
+        has_mov   TYPE abap_bool,
         stock_qty TYPE mard-labst,
       END OF ty_key,
       ty_t_key TYPE HASHED TABLE OF ty_key WITH UNIQUE KEY matnr werks.
@@ -33,76 +33,122 @@ CLASS lcl_app IMPLEMENTATION.
 
     TYPES:
       BEGIN OF ty_result,
-        matnr TYPE mara-matnr,
-        mtart TYPE mara-mtart,
-        matkl TYPE mara-matkl,
-        maktx TYPE makt-maktx,
-        werks TYPE mseg-werks,
-        stock_qty TYPE mard-labst,
-        status_text TYPE char20,
+        matnr      TYPE mara-matnr,
+        mtart      TYPE mara-mtart,
+        matkl      TYPE mara-matkl,
+        maktx      TYPE makt-maktx,
+        werks      TYPE mseg-werks,
+        stock_qty  TYPE mard-labst,
+        status_txt TYPE char20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
-    DATA lt_keys TYPE ty_t_key.
-    DATA ls_key TYPE ty_key.
+    TYPES:
+      BEGIN OF ty_mov_raw,
+        matnr TYPE mseg-matnr,
+        werks TYPE mseg-werks,
+      END OF ty_mov_raw,
+      ty_t_mov_raw TYPE STANDARD TABLE OF ty_mov_raw WITH EMPTY KEY.
 
-    DATA lt_mov TYPE STANDARD TABLE OF ty_key WITH EMPTY KEY.
-    DATA lt_stock TYPE STANDARD TABLE OF ty_key WITH EMPTY KEY.
+    TYPES:
+      BEGIN OF ty_stock_agg,
+        matnr     TYPE mard-matnr,
+        werks     TYPE mard-werks,
+        stock_qty TYPE mard-labst,
+      END OF ty_stock_agg,
+      ty_t_stock_agg TYPE STANDARD TABLE OF ty_stock_agg WITH EMPTY KEY.
 
-    DATA lt_attr TYPE ty_t_attr.
-    DATA ls_attr TYPE ty_attr.
+    DATA lt_keys    TYPE ty_t_key.
+    DATA ls_key     TYPE ty_key.
+    DATA lt_attr    TYPE ty_t_attr.
+    DATA ls_attr    TYPE ty_attr.
+    DATA lt_result  TYPE ty_t_result.
+    DATA ls_result  TYPE ty_result.
+    DATA lt_matnr   TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_mov_raw TYPE ty_t_mov_raw.
+    DATA lt_stock_agg TYPE ty_t_stock_agg.
+    DATA lo_alv TYPE REF TO cl_salv_table.
 
-    DATA lt_result TYPE ty_t_result.
-    DATA ls_result TYPE ty_result.
-
-    DATA lt_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
-
-    " 1) Materials with movement (MKPF/MSEG) per plant/date
-    SELECT DISTINCT
-      mseg~matnr,
-      mseg~werks
-      FROM mseg
-      INNER JOIN mkpf
-        ON mkpf~mblnr = mseg~mblnr
-       AND mkpf~mjahr = mseg~mjahr
-      INTO TABLE @DATA(lt_mov_raw)
-      WHERE mkpf~budat IN @s_budat
-        AND mseg~werks IN @s_werks
-        AND mseg~matnr IN @s_matnr.
+    " 1) Materials with movement (MKPF/MSEG) per plant/date (respect optional MATNR)
+    IF s_matnr[] IS INITIAL.
+      SELECT DISTINCT
+        mseg~matnr,
+        mseg~werks
+        FROM mseg
+        INNER JOIN mkpf
+          ON mkpf~mblnr = mseg~mblnr
+         AND mkpf~mjahr = mseg~mjahr
+        INTO TABLE @lt_mov_raw
+        WHERE mkpf~budat IN @s_budat
+          AND mseg~werks IN @s_werks.
+    ELSE.
+      SELECT DISTINCT
+        mseg~matnr,
+        mseg~werks
+        FROM mseg
+        INNER JOIN mkpf
+          ON mkpf~mblnr = mseg~mblnr
+         AND mkpf~mjahr = mseg~mjahr
+        INTO TABLE @lt_mov_raw
+        WHERE mkpf~budat IN @s_budat
+          AND mseg~werks IN @s_werks
+          AND mseg~matnr IN @s_matnr.
+    ENDIF.
 
     LOOP AT lt_mov_raw INTO DATA(ls_mov_raw).
       CLEAR ls_key.
       ls_key-matnr = ls_mov_raw-matnr.
       ls_key-werks = ls_mov_raw-werks.
       ls_key-has_mov = abap_true.
+      READ TABLE lt_keys INTO DATA(ls_key_exist)
+        WITH TABLE KEY matnr = ls_key-matnr werks = ls_key-werks.
+      IF sy-subrc = 0.
+        " keep existing stock if any, set movement flag
+        ls_key = ls_key_exist.
+        ls_key-has_mov = abap_true.
+        DELETE lt_keys FROM TABLE VALUE ty_t_key( ( ls_key_exist ) ).
+      ENDIF.
       INSERT ls_key INTO TABLE lt_keys.
     ENDLOOP.
 
-    " 2) Materials with current stock > 0 per plant
-    SELECT
-      mard~matnr,
-      mard~werks,
-      SUM( mard~labst ) AS stock_qty
-      FROM mard
-      WHERE mard~werks IN @s_werks
-        AND mard~matnr IN @s_matnr
-      GROUP BY mard~matnr, mard~werks
-      HAVING SUM( mard~labst ) > 0
-      INTO TABLE @DATA(lt_stock_agg).
+    " 2) Materials with current stock > 0 per plant (respect optional MATNR)
+    IF s_matnr[] IS INITIAL.
+      SELECT
+        mard~matnr,
+        mard~werks,
+        SUM( mard~labst ) AS stock_qty
+        FROM mard
+        WHERE mard~werks IN @s_werks
+        GROUP BY mard~matnr, mard~werks
+        HAVING SUM( mard~labst ) > 0
+        INTO TABLE @lt_stock_agg.
+    ELSE.
+      SELECT
+        mard~matnr,
+        mard~werks,
+        SUM( mard~labst ) AS stock_qty
+        FROM mard
+        WHERE mard~werks IN @s_werks
+          AND mard~matnr IN @s_matnr
+        GROUP BY mard~matnr, mard~werks
+        HAVING SUM( mard~labst ) > 0
+        INTO TABLE @lt_stock_agg.
+    ENDIF.
 
     LOOP AT lt_stock_agg INTO DATA(ls_stock_agg).
       READ TABLE lt_keys INTO ls_key
         WITH TABLE KEY matnr = ls_stock_agg-matnr werks = ls_stock_agg-werks.
-      IF sy-subrc <> 0.
+      IF sy-subrc = 0.
+        " update stock on existing entry
+        DELETE lt_keys FROM TABLE VALUE ty_t_key( ( ls_key ) ).
+        ls_key-stock_qty = ls_stock_agg-stock_qty.
+        INSERT ls_key INTO TABLE lt_keys.
+      ELSE.
         CLEAR ls_key.
         ls_key-matnr = ls_stock_agg-matnr.
         ls_key-werks = ls_stock_agg-werks.
         ls_key-has_mov = abap_false.
         ls_key-stock_qty = ls_stock_agg-stock_qty.
-        INSERT ls_key INTO TABLE lt_keys.
-      ELSE.
-        ls_key-stock_qty = ls_stock_agg-stock_qty.
-        DELETE lt_keys FROM TABLE VALUE ty_t_key( ( ls_key ) ).
         INSERT ls_key INTO TABLE lt_keys.
       ENDIF.
     ENDLOOP.
@@ -110,9 +156,9 @@ CLASS lcl_app IMPLEMENTATION.
     " If nothing found, show empty ALV
     IF lt_keys IS INITIAL.
       cl_salv_table=>factory(
-        IMPORTING r_salv_table = DATA(lo_alv_empty)
+        IMPORTING r_salv_table = lo_alv
         CHANGING  t_table      = lt_result ).
-      lo_alv_empty->display( ).
+      lo_alv->display( ).
       RETURN.
     ENDIF.
 
@@ -124,6 +170,7 @@ CLASS lcl_app IMPLEMENTATION.
     DELETE ADJACENT DUPLICATES FROM lt_matnr.
 
     " 3) Fetch material attributes and text
+    DATA lt_attr_raw TYPE STANDARD TABLE OF ty_attr WITH EMPTY KEY.
     SELECT
       mara~matnr,
       mara~mtart,
@@ -133,10 +180,9 @@ CLASS lcl_app IMPLEMENTATION.
       LEFT JOIN makt
         ON makt~matnr = mara~matnr
        AND makt~spras = @sy-langu
-      INTO TABLE @DATA(lt_attr_raw)
+      INTO TABLE @lt_attr_raw
       WHERE mara~matnr IN @lt_matnr.
 
-    " Map to hashed by matnr
     LOOP AT lt_attr_raw INTO ls_attr.
       INSERT ls_attr INTO TABLE lt_attr.
     ENDLOOP.
@@ -144,6 +190,28 @@ CLASS lcl_app IMPLEMENTATION.
     " 4) Build final result
     LOOP AT lt_keys INTO ls_key.
       CLEAR ls_result.
-      READ TABLE lt_attr INTO ls_attr WITH TABLE KEY matnr = ls_key-matnr.
+      READ TABLE lt_attr INTO ls_attr
+        WITH TABLE KEY matnr = ls_key-matnr.
       ls_result-matnr = ls_key-matnr.
-      ls_result-werks = ls_key
+      ls_result-werks = ls_key-werks.
+      ls_result-mtart = ls_attr-mtart.
+      ls_result-matkl = ls_attr-matkl.
+      ls_result-maktx = ls_attr-maktx.
+      ls_result-stock_qty = ls_key-stock_qty.
+      IF ls_key-has_mov = abap_true.
+        ls_result-status_txt = '입출고 있음'.
+      ELSE.
+        ls_result-status_txt = '재고만 있음'.
+      ENDIF.
+      APPEND ls_result TO lt_result.
+    ENDLOOP.
+
+    cl_salv_table=>factory(
+      IMPORTING r_salv_table = lo_alv
+      CHANGING  t_table      = lt_result ).
+    lo_alv->display( ).
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  lcl_app=>run( ).
