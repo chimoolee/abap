@@ -83,13 +83,13 @@ CLASS lcl_app IMPLEMENTATION.
       CLEAR: lv_in_mov, lv_in_stock.
 
       READ TABLE lt_mov_matnr WITH KEY table_line = ls_res-matnr
-           TRANSPORTING NO FIELDS BINARY SEARCH.
+        TRANSPORTING NO FIELDS BINARY SEARCH.
       IF sy-subrc = 0.
         lv_in_mov = abap_true.
       ENDIF.
 
       READ TABLE lt_stock_matnr WITH KEY table_line = ls_res-matnr
-           TRANSPORTING NO FIELDS BINARY SEARCH.
+        TRANSPORTING NO FIELDS BINARY SEARCH.
       IF sy-subrc = 0.
         lv_in_stock = abap_true.
       ENDIF.
@@ -110,7 +110,7 @@ CLASS lcl_app IMPLEMENTATION.
     " 6) Display ALV
     DATA lo_alv TYPE REF TO cl_salv_table.
     TRY.
-        cl_salv_table=>factory(
+        cl_sAlv_table=>factory(
           IMPORTING
             r_salv_table = lo_alv
           CHANGING
