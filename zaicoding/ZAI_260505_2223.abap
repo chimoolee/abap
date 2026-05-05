@@ -14,8 +14,21 @@ ENDCLASS.
 CLASS lcl_app IMPLEMENTATION.
   METHOD run.
     TYPES:
+      BEGIN OF ty_pair,
+        matnr TYPE mara-matnr,
+        werks TYPE werks_d,
+      END OF ty_pair,
+      ty_t_pair TYPE STANDARD TABLE OF ty_pair WITH EMPTY KEY,
+      BEGIN OF ty_mdata,
+        matnr TYPE mara-matnr,
+        mtart TYPE mara-mtart,
+        matkl TYPE mara-matkl,
+        maktx TYPE makt-maktx,
+      END OF ty_mdata,
+      ty_t_mdata TYPE STANDARD TABLE OF ty_mdata WITH EMPTY KEY,
       BEGIN OF ty_result,
         matnr  TYPE mara-matnr,
+        werks  TYPE werks_d,
         mtart  TYPE mara-mtart,
         matkl  TYPE mara-matkl,
         maktx  TYPE makt-maktx,
@@ -23,87 +36,140 @@ CLASS lcl_app IMPLEMENTATION.
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
-    DATA lt_result       TYPE ty_t_result.
-    DATA lo_alv          TYPE REF TO cl_salv_table.
+    DATA lt_mov_matnr   TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_stock_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_union       TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
-    DATA lt_mov_matnr    TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
-    DATA lt_stock_matnr  TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
-    DATA lt_matnr_all    TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lt_mov_pairs   TYPE ty_t_pair.
+    DATA lt_stock_pairs TYPE ty_t_pair.
+    DATA lt_pairs_all   TYPE ty_t_pair.
 
-    " 1) Materials with movements in date/plant
+    DATA lt_mdata  TYPE ty_t_mdata.
+    DATA lt_result TYPE ty_t_result.
+
+    " Materials with movements in selected date and plant
     SELECT DISTINCT
-           mseg~matnr
+      mseg~matnr
       FROM mseg
       INNER JOIN mkpf
         ON mkpf~mblnr = mseg~mblnr
        AND mkpf~mjahr = mseg~mjahr
-      INTO TABLE @lt_mov_matnr
       WHERE mkpf~budat IN @s_budat
-        AND mseg~werks IN @s_werks.
+        AND mseg~werks IN @s_werks
+      INTO TABLE @lt_mov_matnr.
 
-    " 2) Materials with current stock <> 0 in selected plants
     SELECT DISTINCT
-           mard~matnr
+      mseg~matnr,
+      mseg~werks
+      FROM mseg
+      INNER JOIN mkpf
+        ON mkpf~mblnr = mseg~mblnr
+       AND mkpf~mjahr = mseg~mjahr
+      WHERE mkpf~budat IN @s_budat
+        AND mseg~werks IN @s_werks
+      INTO TABLE @lt_mov_pairs.
+
+    " Materials with current non-zero stock in selected plants
+    SELECT DISTINCT
+      mard~matnr
       FROM mard
-      INTO TABLE @lt_stock_matnr
       WHERE mard~werks IN @s_werks
-        AND mard~labst <> 0.
+        AND mard~labst <> 0
+      INTO TABLE @lt_stock_matnr.
 
-    " 3) Union of materials
-    lt_matnr_all = lt_mov_matnr.
-    APPEND LINES OF lt_stock_matnr TO lt_matnr_all.
-    SORT lt_matnr_all.
-    DELETE ADJACENT DUPLICATES FROM lt_matnr_all.
+    SELECT DISTINCT
+      mard~matnr,
+      mard~werks
+      FROM mard
+      WHERE mard~werks IN @s_werks
+        AND mard~labst <> 0
+      INTO TABLE @lt_stock_pairs.
 
-    " 4) Read master data/texts for union set
-    IF lt_matnr_all IS NOT INITIAL.
-      SELECT
-        mara~matnr,
-        mara~mtart,
-        mara~matkl,
-        makt~maktx
-        FROM mara
-        LEFT JOIN makt
-          ON makt~matnr = mara~matnr
-         AND makt~spras = @sy-langu
-        INTO TABLE @lt_result
-        WHERE mara~matnr IN @lt_matnr_all.
+    " Union of materials (movement OR stock>0)
+    APPEND LINES OF lt_mov_matnr   TO lt_union.
+    APPEND LINES OF lt_stock_matnr TO lt_union.
+    SORT lt_union BY table_line.
+    DELETE ADJACENT DUPLICATES FROM lt_union COMPARING table_line.
+
+    IF lt_union IS INITIAL.
+      WRITE: / '선택한 조건에 해당하는 자재가 없습니다.'.
+      RETURN.
     ENDIF.
 
-    " Prepare lookup: sort movement/stock sets for fast READ
-    SORT lt_mov_matnr.
-    SORT lt_stock_matnr.
+    " Read material master and text for all union materials
+    SELECT
+      mara~matnr,
+      mara~mtart,
+      mara~matkl,
+      makt~maktx
+      FROM mara
+      LEFT JOIN makt
+        ON makt~matnr = mara~matnr
+       AND makt~spras = @sy-langu
+      INTO TABLE @lt_mdata
+      WHERE mara~matnr IN @lt_union.
 
-    " 5) Derive status text
-    DATA lv_matnr TYPE mara-matnr.
-    LOOP AT lt_result ASSIGNING FIELD-SYMBOL(<ls_res>).
-      lv_matnr = <ls_res>-matnr.
+    SORT lt_mdata BY matnr.
+
+    " Build union of material-plant pairs to display status per plant
+    APPEND LINES OF lt_mov_pairs   TO lt_pairs_all.
+    APPEND LINES OF lt_stock_pairs TO lt_pairs_all.
+    SORT lt_pairs_all BY matnr werks.
+    DELETE ADJACENT DUPLICATES FROM lt_pairs_all COMPARING matnr werks.
+
+    SORT lt_mov_pairs BY matnr werks.
+    SORT lt_stock_pairs BY matnr werks.
+
+    " Assemble result with status
+    DATA ls_res TYPE ty_result.
+    LOOP AT lt_pairs_all ASSIGNING FIELD-SYMBOL(<ls_pair>).
+      CLEAR ls_res.
+      ls_res-matnr = <ls_pair>-matnr.
+      ls_res-werks = <ls_pair>-werks.
+
+      READ TABLE lt_mdata ASSIGNING FIELD-SYMBOL(<ls_md>)
+        WITH KEY matnr = <ls_pair>-matnr BINARY SEARCH.
+      IF sy-subrc = 0.
+        ls_res-mtart = <ls_md>-mtart.
+        ls_res-matkl = <ls_md>-matkl.
+        ls_res-maktx = <ls_md>-maktx.
+      ENDIF.
+
       DATA(lv_has_mov) = abap_false.
       DATA(lv_has_stk) = abap_false.
 
-      READ TABLE lt_mov_matnr WITH KEY table_line = lv_matnr
-           TRANSPORTING NO FIELDS BINARY SEARCH.
+      READ TABLE lt_mov_pairs TRANSPORTING NO FIELDS
+        WITH KEY matnr = <ls_pair>-matnr
+                 werks = <ls_pair>-werks BINARY SEARCH.
       IF sy-subrc = 0.
         lv_has_mov = abap_true.
       ENDIF.
 
-      READ TABLE lt_stock_matnr WITH KEY table_line = lv_matnr
-           TRANSPORTING NO FIELDS BINARY SEARCH.
+      READ TABLE lt_stock_pairs TRANSPORTING NO FIELDS
+        WITH KEY matnr = <ls_pair>-matnr
+                 werks = <ls_pair>-werks BINARY SEARCH.
       IF sy-subrc = 0.
         lv_has_stk = abap_true.
       ENDIF.
 
       IF lv_has_mov = abap_true.
-        <ls_res>-status = |입출고 있음|.
+        ls_res-status = '입출고 있음'.
       ELSEIF lv_has_stk = abap_true.
-        <ls_res>-status = |재고만 있음|.
+        ls_res-status = '재고만 있음'.
       ELSE.
-        " Should not occur because of union; keep safe default
-        <ls_res>-status = |해당 없음|.
+        CONTINUE.
       ENDIF.
+
+      APPEND ls_res TO lt_result.
     ENDLOOP.
 
-    " 6) Show ALV
+    IF lt_result IS INITIAL.
+      WRITE: / '선택한 조건에 해당하는 자재가 없습니다.'.
+      RETURN.
+    ENDIF.
+
+    " Display ALV
+    DATA lo_alv TYPE REF TO cl_salv_table.
     TRY.
         cl_salv_table=>factory(
           IMPORTING
@@ -112,15 +178,11 @@ CLASS lcl_app IMPLEMENTATION.
             t_table      = lt_result ).
 
         lo_alv->get_functions( )->set_all( abap_true ).
+        lo_alv->get_columns( )->set_optimize( abap_true ).
         lo_alv->display( ).
-      CATCH cx_salv_msg INTO DATA(lx).
-        WRITE: / 'ALV 오류: ', lx->get_text( ).
+      CATCH cx_salv_msg INTO DATA(lx_msg).
+        WRITE: / 'ALV 오류: ', lx_msg->get_text( ).
     ENDTRY.
-
-    IF lt_result IS INITIAL.
-      WRITE: / '선택 조건에 해당하는 자재가 없습니다.'.
-      WRITE: / '조건: 전기일, 플랜트. 입출고 또는 현재 재고<>0 자재 표시.'.
-    ENDIF.
   ENDMETHOD.
 ENDCLASS.
 
