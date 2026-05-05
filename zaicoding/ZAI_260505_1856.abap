@@ -55,7 +55,7 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_matdet     TYPE ty_t_matdet.
     DATA lt_result     TYPE ty_t_result.
 
-    " Movements: materials with material documents by date/plant
+    " Materials with movements by optional date/plant
     IF s_budat[] IS INITIAL AND s_werks[] IS INITIAL.
       SELECT DISTINCT
         mseg~matnr,
@@ -165,7 +165,7 @@ CLASS lcl_app IMPLEMENTATION.
 
       DATA(lv_status) = CONV char20( '' ).
       READ TABLE lt_move_keys WITH KEY matnr = ls_key-matnr werks = ls_key-werks
-           TRANSPORTING NO FIELDS.
+        TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_status = '입출고 있음'.
       ELSE.
