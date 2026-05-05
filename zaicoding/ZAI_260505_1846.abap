@@ -1,5 +1,7 @@
 REPORT ZAI_260505_1846.
 
+TABLES: mara, mard.
+
 SELECT-OPTIONS s_budat FOR mkpf~budat.
 SELECT-OPTIONS s_werks FOR t001w-werks.
 
@@ -35,7 +37,7 @@ CLASS lcl_app IMPLEMENTATION.
         matkl  TYPE mara-matkl,
         maktx  TYPE makt-maktx,
         werks  TYPE mard-werks,
-        status TYPE char20,
+        status TYPE c LENGTH 20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
@@ -149,14 +151,16 @@ CLASS lcl_app IMPLEMENTATION.
     LOOP AT lt_merged INTO DATA(ls_row).
       READ TABLE lt_info INTO DATA(ls_info)
         WITH KEY matnr = ls_row-matnr.
-      DATA(lv_status) = COND char20(
-        WHEN ls_row-has_mov = abap_true AND ls_row-has_stock = abap_true
-          THEN '입출고+재고'
-        WHEN ls_row-has_mov = abap_true
-          THEN '입출고 있음'
-        WHEN ls_row-has_stock = abap_true
-          THEN '재고만 있음'
-        ELSE ' ' ).
+      DATA(lv_status) TYPE c LENGTH 20.
+      IF ls_row-has_mov = abap_true AND ls_row-has_stock = abap_true.
+        lv_status = '입출고+재고'.
+      ELSEIF ls_row-has_mov = abap_true.
+        lv_status = '입출고 있음'.
+      ELSEIF ls_row-has_stock = abap_true.
+        lv_status = '재고만 있음'.
+      ELSE.
+        lv_status = ''.
+      ENDIF.
 
       APPEND VALUE ty_result(
         matnr  = ls_row-matnr
