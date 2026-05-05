@@ -1,6 +1,7 @@
 REPORT ZAI_260505_2256.
 
 TABLES mara.
+TABLES t001w.
 
 SELECT-OPTIONS s_budat FOR sy-datum.
 SELECT-OPTIONS s_werks FOR t001w-werks.
@@ -54,7 +55,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA lo_alv TYPE REF TO cl_salv_table.
 
-*   1) Materials with goods movement in selection
+*   1) Materials with goods movement based on selection
     IF s_budat[] IS INITIAL AND s_werks[] IS INITIAL.
       SELECT mseg~matnr,
              mseg~werks
@@ -160,25 +161,25 @@ CLASS lcl_app IMPLEMENTATION.
 
       READ TABLE lt_mv_keys WITH KEY matnr = ls_key-matnr
                                      werks = ls_key-werks
-                           TRANSPORTING NO FIELDS.
+                                     TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         lv_has_mv = abap_true.
       ENDIF.
 
       READ TABLE lt_stock INTO ls_stock
-                 WITH KEY matnr = ls_key-matnr
-                          werks = ls_key-werks.
+           WITH KEY matnr = ls_key-matnr
+                    werks = ls_key-werks.
       IF sy-subrc = 0.
         lv_qty = ls_stock-qty.
       ENDIF.
 
       READ TABLE lt_matinfo INTO ls_info
-                 WITH KEY matnr = ls_key-matnr.
+           WITH KEY matnr = ls_key-matnr.
 
       DATA(lv_status) = COND string(
-        WHEN lv_has_mv = abap_true THEN '입출고 실적'
-        WHEN lv_qty    <> 0        THEN '재고만 있음'
-        ELSE                         '해당없음' ).
+                          WHEN lv_has_mv = abap_true THEN '입출고 실적'
+                          WHEN lv_qty    <> 0        THEN '재고만 있음'
+                          ELSE                           '해당없음' ).
 
       APPEND VALUE ty_result(
         matnr  = ls_key-matnr
