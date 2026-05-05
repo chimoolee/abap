@@ -1,7 +1,9 @@
 REPORT ZAI_260505_2008.
 
-SELECT-OPTIONS s_budat FOR mkpf~budat.
-SELECT-OPTIONS s_werks FOR mseg~werks.
+TABLES mara.
+
+SELECT-OPTIONS s_budat FOR sy-datum.
+SELECT-OPTIONS s_werks FOR t001w-werks.
 
 CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
@@ -15,141 +17,144 @@ CLASS lcl_app IMPLEMENTATION.
         matnr TYPE mara-matnr,
         werks TYPE werks_d,
       END OF ty_key,
-      ty_t_key TYPE STANDARD TABLE OF ty_key WITH EMPTY KEY,
+      ty_t_key TYPE STANDARD TABLE OF ty_key WITH EMPTY KEY.
+
+    TYPES:
       BEGIN OF ty_stock,
-        matnr TYPE mara-matnr,
-        werks TYPE werks_d,
-        qty   TYPE mard-labst,
+        matnr     TYPE mara-matnr,
+        werks     TYPE werks_d,
+        stock_qty TYPE mard-labst,
       END OF ty_stock,
-      ty_t_stock TYPE STANDARD TABLE OF ty_stock WITH EMPTY KEY,
-      BEGIN OF ty_attr,
+      ty_t_stock TYPE STANDARD TABLE OF ty_stock WITH EMPTY KEY.
+
+    TYPES:
+      BEGIN OF ty_text,
         matnr TYPE mara-matnr,
         mtart TYPE mara-mtart,
         matkl TYPE mara-matkl,
         maktx TYPE makt-maktx,
-      END OF ty_attr,
-      ty_t_attr TYPE HASHED TABLE OF ty_attr WITH UNIQUE KEY matnr,
+      END OF ty_text,
+      ty_t_text TYPE STANDARD TABLE OF ty_text WITH EMPTY KEY.
+
+    TYPES:
       BEGIN OF ty_result,
-        matnr TYPE mara-matnr,
-        werks TYPE werks_d,
-        mtart TYPE mara-mtart,
-        matkl TYPE mara-matkl,
-        maktx TYPE makt-maktx,
-        stock TYPE mard-labst,
-        status TYPE char20,
+        matnr     TYPE mara-matnr,
+        werks     TYPE werks_d,
+        mtart     TYPE mara-mtart,
+        matkl     TYPE mara-matkl,
+        maktx     TYPE makt-maktx,
+        stock_qty TYPE mard-labst,
+        status    TYPE c LENGTH 20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
-    DATA lt_move_keys TYPE ty_t_key.
-    DATA lt_stock     TYPE ty_t_stock.
-    DATA lt_keys      TYPE ty_t_key.
-    DATA lt_result    TYPE ty_t_result.
-    DATA lt_matnr     TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
-    DATA lt_attr      TYPE ty_t_attr.
+    DATA lt_move   TYPE ty_t_key.
+    DATA lt_stock  TYPE ty_t_stock.
+    DATA lt_key    TYPE ty_t_key.
+    DATA lt_text   TYPE ty_t_text.
+    DATA lt_result TYPE ty_t_result.
 
-    " 1) Movement-based materials by plant and posting date
+    " Materials with movements by posting date and plant
     SELECT DISTINCT
            mseg~matnr,
            mseg~werks
       FROM mseg
       INNER JOIN mkpf
-        ON mkpf~mblnr = mseg~mblnr
-       AND mkpf~mjahr = mseg~mjahr
-      INTO TABLE @lt_move_keys
-      WHERE mkpf~budat IN @s_budat
-        AND mseg~werks IN @s_werks.
+              ON mkpf~mblnr = mseg~mblnr
+             AND mkpf~mjahr = mseg~mjahr
+      INTO TABLE @lt_move
+      WHERE ( @s_budat[] IS INITIAL OR mkpf~budat IN @s_budat )
+        AND ( @s_werks[] IS INITIAL OR mseg~werks IN @s_werks )
+        AND mseg~matnr <> ''.
 
-    " 2) Current stock (non-zero) per material and plant
+    " Materials with non-zero current stock by plant
     SELECT
-      matnr,
-      werks,
-      SUM( labst ) AS qty
+           mard~matnr,
+           mard~werks,
+           SUM( mard~labst ) AS stock_qty
       FROM mard
-      INTO TABLE @lt_stock
-      WHERE werks IN @s_werks
-      GROUP BY matnr, werks
-      HAVING SUM( labst ) <> 0.
+      WHERE ( @s_werks[] IS INITIAL OR mard~werks IN @s_werks )
+      GROUP BY mard~matnr, mard~werks
+      HAVING SUM( mard~labst ) > 0
+      INTO TABLE @lt_stock.
 
-    " 3) Build union of keys (materials/plants from movement or non-zero stock)
-    lt_keys = lt_move_keys.
-    APPEND LINES OF lt_stock TO lt_keys.
-    SORT lt_keys BY matnr werks.
-    DELETE ADJACENT DUPLICATES FROM lt_keys COMPARING matnr werks.
+    " Union keys: movements + stock>0
+    lt_key = lt_move.
+    APPEND LINES OF lt_stock TO lt_key.
+    SORT lt_key BY matnr werks.
+    DELETE ADJACENT DUPLICATES FROM lt_key COMPARING matnr werks.
 
-    IF lt_keys IS INITIAL.
-      WRITE: / '선택 조건에 해당하는 자재가 없습니다.'.
-      RETURN.
+    " Build material list for text selection
+    DATA lt_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
+    DATA lv_prev TYPE mara-matnr.
+    LOOP AT lt_key INTO DATA(ls_key).
+      IF ls_key-matnr <> lv_prev.
+        APPEND ls_key-matnr TO lt_matnr.
+        lv_prev = ls_key-matnr.
+      ENDIF.
+    ENDLOOP.
+
+    " Read material master/texts
+    IF lt_matnr IS NOT INITIAL.
+      SELECT
+             mara~matnr,
+             mara~mtart,
+             mara~matkl,
+             makt~maktx
+        FROM mara
+        LEFT JOIN makt
+               ON makt~matnr = mara~matnr
+              AND makt~spras = @sy-langu
+        INTO TABLE @lt_text
+        WHERE mara~matnr IN @lt_matnr.
     ENDIF.
 
-    " 4) Prepare material number list for attribute select
-    LOOP AT lt_keys INTO DATA(ls_key).
-      APPEND ls_key-matnr TO lt_matnr.
-    ENDLOOP.
-    SORT lt_matnr.
-    DELETE ADJACENT DUPLICATES FROM lt_matnr.
-
-    " 5) Read basic material attributes and text
-    SELECT
-      mara~matnr,
-      mara~mtart,
-      mara~matkl,
-      makt~maktx
-      FROM mara
-      LEFT JOIN makt
-        ON makt~matnr = mara~matnr
-       AND makt~spras = @sy-langu
-      INTO TABLE @DATA(lt_attr_raw)
-      WHERE mara~matnr IN @lt_matnr.
-
-    lt_attr = CORRESPONDING ty_t_attr( lt_attr_raw ).
-
-    " 6) Build result rows with status
-    LOOP AT lt_keys INTO ls_key.
+    " Assemble result with status
+    LOOP AT lt_key INTO ls_key.
       DATA(ls_res) = VALUE ty_result(
         matnr = ls_key-matnr
-        werks = ls_key-werks
-        stock = 0
-        status = '' ).
+        werks = ls_key-werks ).
 
-      " Attributes
-      READ TABLE lt_attr WITH TABLE KEY matnr = ls_key-matnr INTO DATA(ls_attr).
+      READ TABLE lt_text INTO DATA(ls_text)
+        WITH KEY matnr = ls_key-matnr BINARY SEARCH.
       IF sy-subrc = 0.
-        ls_res-mtart = ls_attr-mtart.
-        ls_res-matkl = ls_attr-matkl.
-        ls_res-maktx = ls_attr-maktx.
+        ls_res-mtart = ls_text-mtart.
+        ls_res-matkl = ls_text-matkl.
+        ls_res-maktx = ls_text-maktx.
       ENDIF.
 
-      " Stock qty (non-zero list already filtered, but read exact value)
-      READ TABLE lt_stock WITH KEY matnr = ls_key-matnr werks = ls_key-werks INTO DATA(ls_stk).
+      READ TABLE lt_stock INTO DATA(ls_stk)
+        WITH KEY matnr = ls_key-matnr werks = ls_key-werks BINARY SEARCH.
       IF sy-subrc = 0.
-        ls_res-stock = ls_stk-qty.
+        ls_res-stock_qty = ls_stk-stock_qty.
+      ELSE.
+        ls_res-stock_qty = 0.
       ENDIF.
 
-      " Status
-      READ TABLE lt_move_keys WITH KEY matnr = ls_key-matnr werks = ls_key-werks TRANSPORTING NO FIELDS.
-      IF sy-subrc <> 0 AND ls_res-stock <> 0.
+      READ TABLE lt_move WITH KEY matnr = ls_key-matnr werks = ls_key-werks
+        TRANSPORTING NO FIELDS BINARY SEARCH.
+      IF sy-subrc = 0.
+        ls_res-status = '입출고 실적'.
+      ELSEIF ls_res-stock_qty > 0.
         ls_res-status = '재고만 있음'.
       ELSE.
-        ls_res-status = '입출고 있음'.
+        ls_res-status = ''.
       ENDIF.
 
       APPEND ls_res TO lt_result.
     ENDLOOP.
 
-    " 7) Display ALV
+    " Display ALV
     DATA lo_alv TYPE REF TO cl_salv_table.
-    TRY.
-        cl_sAlv_table=>factory(
-          IMPORTING
-            r_salv_table = lo_alv
-          CHANGING
-            t_table      = lt_result ).
-        lo_alv->get_functions( )->set_all( abap_true ).
-        lo_alv->get_columns( )->set_optimize( abap_true ).
-        lo_alv->display( ).
-      CATCH cx_salv_msg INTO DATA(lx).
-        WRITE: / 'ALV 오류: ', lx->get_text( ).
-    ENDTRY.
+    cl_salv_table=>factory(
+      IMPORTING
+        r_salv_table = lo_alv
+      CHANGING
+        t_table      = lt_result ).
+
+    lo_alv->get_functions( )->set_all( abap_true ).
+    lo_alv->get_columns( )->set_optimize( abap_true ).
+    lo_alv->display( ).
   ENDMETHOD.
 ENDCLASS.
 
