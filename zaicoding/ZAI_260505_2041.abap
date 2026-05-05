@@ -1,5 +1,7 @@
 REPORT ZAI_260505_2041.
 
+TABLES mara.
+
 SELECT-OPTIONS:
   s_budat FOR mkpf~budat OBLIGATORY,
   s_werks FOR t001w-werks OBLIGATORY.
@@ -10,26 +12,25 @@ CLASS lcl_app DEFINITION FINAL.
 ENDCLASS.
 
 CLASS lcl_app IMPLEMENTATION.
-  CLASS-METHODS run.
+  METHOD run.
     TYPES:
       BEGIN OF ty_result,
-        matnr TYPE mara-matnr,
-        mtart TYPE mara-mtart,
-        matkl TYPE mara-matkl,
-        maktx TYPE makt-maktx,
+        matnr  TYPE mara-matnr,
+        mtart  TYPE mara-mtart,
+        matkl  TYPE mara-matkl,
+        maktx  TYPE makt-maktx,
         status TYPE char20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
-    DATA lt_result TYPE ty_t_result.
-
+    DATA lt_result      TYPE ty_t_result.
     DATA lt_mov_matnr   TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
     DATA lt_stock_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
     DATA lt_union       TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
 
-    " 1) Materials with movements in date/plant
+    " 1) Materials with movements in selected date/plant
     SELECT DISTINCT
-           mseg~matnr
+      mseg~matnr
       FROM mseg
       INNER JOIN mkpf
         ON mkpf~mblnr = mseg~mblnr
@@ -38,15 +39,15 @@ CLASS lcl_app IMPLEMENTATION.
       WHERE mkpf~budat IN @s_budat
         AND mseg~werks IN @s_werks.
 
-    " 2) Materials with current stock (non-zero) in plant
+    " 2) Materials with current non-zero stock in plant
     SELECT DISTINCT
-           mard~matnr
+      mard~matnr
       FROM mard
       INTO TABLE @lt_stock_matnr
       WHERE mard~werks IN @s_werks
         AND mard~labst <> 0.
 
-    " 3) Union of both lists
+    " 3) Union
     APPEND LINES OF lt_mov_matnr   TO lt_union.
     APPEND LINES OF lt_stock_matnr TO lt_union.
     SORT lt_union.
@@ -70,19 +71,13 @@ CLASS lcl_app IMPLEMENTATION.
       INTO TABLE @lt_result
       WHERE mara~matnr IN @lt_union.
 
-    IF sy-subrc <> 0.
-      WRITE: / '자재 마스터를 읽는 중 오류가 발생했습니다.'.
-      RETURN.
-    ENDIF.
-
-    " 5) Derive status text
+    " 5) Derive status
     SORT lt_mov_matnr.
     SORT lt_stock_matnr.
 
     DATA lv_in_mov   TYPE abap_bool.
     DATA lv_in_stock TYPE abap_bool.
-
-    DATA ls_res TYPE ty_result.
+    DATA ls_res      TYPE ty_result.
 
     LOOP AT lt_result INTO ls_res.
       CLEAR: lv_in_mov, lv_in_stock.
