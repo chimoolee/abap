@@ -115,21 +115,21 @@ CLASS lcl_app IMPLEMENTATION.
         mard~werks,
         SUM( mard~labst ) AS stock_qty
         FROM mard
+        INTO TABLE @lt_stock_agg
         WHERE mard~werks IN @s_werks
         GROUP BY mard~matnr, mard~werks
-        HAVING SUM( mard~labst ) > 0
-        INTO TABLE @lt_stock_agg.
+        HAVING SUM( mard~labst ) > 0.
     ELSE.
       SELECT
         mard~matnr,
         mard~werks,
         SUM( mard~labst ) AS stock_qty
         FROM mard
+        INTO TABLE @lt_stock_agg
         WHERE mard~werks IN @s_werks
           AND mard~matnr IN @s_matnr
         GROUP BY mard~matnr, mard~werks
-        HAVING SUM( mard~labst ) > 0
-        INTO TABLE @lt_stock_agg.
+        HAVING SUM( mard~labst ) > 0.
     ENDIF.
 
     LOOP AT lt_stock_agg INTO DATA(ls_stock_agg).
