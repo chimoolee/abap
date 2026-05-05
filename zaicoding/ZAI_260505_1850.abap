@@ -1,7 +1,7 @@
 REPORT ZAI_260505_1850.
 
 SELECT-OPTIONS: s_budat FOR mkpf~budat,
-                 s_werks FOR mseg~werks.
+                s_werks FOR mseg~werks.
 
 CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
@@ -65,8 +65,8 @@ CLASS lcl_app IMPLEMENTATION.
     " Movements by posting date and plant
     IF s_budat[] IS INITIAL AND s_werks[] IS INITIAL.
       SELECT DISTINCT
-             mseg~matnr,
-             mseg~werks
+        mseg~matnr,
+        mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
@@ -74,8 +74,8 @@ CLASS lcl_app IMPLEMENTATION.
         INTO TABLE @lt_mov.
     ELSEIF s_budat[] IS INITIAL AND s_werks[] IS NOT INITIAL.
       SELECT DISTINCT
-             mseg~matnr,
-             mseg~werks
+        mseg~matnr,
+        mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
@@ -84,8 +84,8 @@ CLASS lcl_app IMPLEMENTATION.
         WHERE mseg~werks IN @s_werks.
     ELSEIF s_budat[] IS NOT INITIAL AND s_werks[] IS INITIAL.
       SELECT DISTINCT
-             mseg~matnr,
-             mseg~werks
+        mseg~matnr,
+        mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
@@ -94,8 +94,8 @@ CLASS lcl_app IMPLEMENTATION.
         WHERE mkpf~budat IN @s_budat.
     ELSE.
       SELECT DISTINCT
-             mseg~matnr,
-             mseg~werks
+        mseg~matnr,
+        mseg~werks
         FROM mseg
         INNER JOIN mkpf
           ON mkpf~mblnr = mseg~mblnr
@@ -108,18 +108,18 @@ CLASS lcl_app IMPLEMENTATION.
     " Current stock by plant: only non-zero totals
     IF s_werks[] IS INITIAL.
       SELECT
-             mard~matnr,
-             mard~werks,
-             SUM( mard~labst ) AS qty
+        mard~matnr,
+        mard~werks,
+        SUM( mard~labst ) AS qty
         FROM mard
         GROUP BY mard~matnr, mard~werks
         HAVING SUM( mard~labst ) > 0
         INTO TABLE @lt_stk.
     ELSE.
       SELECT
-             mard~matnr,
-             mard~werks,
-             SUM( mard~labst ) AS qty
+        mard~matnr,
+        mard~werks,
+        SUM( mard~labst ) AS qty
         FROM mard
         WHERE mard~werks IN @s_werks
         GROUP BY mard~matnr, mard~werks
@@ -181,10 +181,10 @@ CLASS lcl_app IMPLEMENTATION.
     " Fetch material master and text
     IF lt_matnr IS NOT INITIAL.
       SELECT
-             mara~matnr,
-             mara~mtart,
-             mara~matkl,
-             makt~maktx
+        mara~matnr,
+        mara~mtart,
+        mara~matkl,
+        makt~maktx
         FROM mara
         LEFT JOIN makt
           ON makt~matnr = mara~matnr
@@ -204,7 +204,8 @@ CLASS lcl_app IMPLEMENTATION.
 
     LOOP AT lt_comb INTO ls_comb.
       CLEAR: ls_info, ls_res.
-      READ TABLE lt_h_matinfo INTO ls_info WITH TABLE KEY matnr = ls_comb-matnr.
+      READ TABLE lt_h_matinfo INTO ls_info
+        WITH TABLE KEY matnr = ls_comb-matnr.
       ls_res-matnr = ls_comb-matnr.
       ls_res-mtart = ls_info-mtart.
       ls_res-matkl = ls_info-matkl.
@@ -216,4 +217,19 @@ CLASS lcl_app IMPLEMENTATION.
     ENDLOOP.
 
     " Display ALV
-    DATA lo_al
+    DATA lo_alv TYPE REF TO cl_salv_table.
+    cl_salv_table=>factory(
+      IMPORTING
+        r_salv_table = lo_alv
+      CHANGING
+        t_table      = lt_result ).
+
+    lo_alv->get_display_settings( )->set_list_header(
+      value = '입출고 실적 보유 자재 + 현재 재고 보유 자재 리스트' ).
+    lo_alv->get_functions( )->set_all( abap_true ).
+    lo_alv->display( ).
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  lcl_app=>run( ).
