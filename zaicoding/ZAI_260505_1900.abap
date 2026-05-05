@@ -1,5 +1,7 @@
 REPORT ZAI_260505_1900.
 
+TABLES: mara, mard.
+
 SELECT-OPTIONS s_budat FOR mkpf~budat.
 SELECT-OPTIONS s_werks FOR mseg~werks.
 
@@ -42,14 +44,14 @@ CLASS lcl_app DEFINITION FINAL.
 
     CLASS-METHODS get_movements
       IMPORTING
-        it_budat TYPE RANGE OF mkpf-budat
-        it_werks TYPE RANGE OF mseg-werks
+        it_budat TYPE RANGE OF budat
+        it_werks TYPE RANGE OF werks_d
       RETURNING
         VALUE(rt_mov) TYPE ty_t_key_h.
 
     CLASS-METHODS get_stocks
       IMPORTING
-        it_werks TYPE RANGE OF mard-werks
+        it_werks TYPE RANGE OF werks_d
       RETURNING
         VALUE(rt_stock) TYPE ty_t_stock_h.
 
@@ -107,14 +109,16 @@ CLASS lcl_app IMPLEMENTATION.
         ls_res-maktx = ls_info-maktx.
       ENDIF.
 
-      READ TABLE lt_stock WITH TABLE KEY matnr = ls_key-matnr werks = ls_key-werks INTO ls_stock.
+      READ TABLE lt_stock WITH TABLE KEY matnr = ls_key-matnr
+                                     werks = ls_key-werks INTO ls_stock.
       IF sy-subrc = 0.
         ls_res-qty = ls_stock-qty.
       ELSE.
         ls_res-qty = 0.
       ENDIF.
 
-      READ TABLE lt_mov WITH TABLE KEY matnr = ls_key-matnr werks = ls_key-werks INTO ls_key.
+      READ TABLE lt_mov WITH TABLE KEY matnr = ls_key-matnr
+                                   werks = ls_key-werks INTO ls_key.
       IF sy-subrc <> 0 AND ls_res-qty <> 0.
         ls_res-status = '재고만 있음'.
       ELSE.
@@ -174,8 +178,7 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD get_material_info.
-    DATA lt_join   TYPE STANDARD TABLE OF ty_info WITH EMPTY KEY.
-    DATA lt_local  TYPE STANDARD TABLE OF ty_info WITH EMPTY KEY.
+    DATA lt_local TYPE STANDARD TABLE OF ty_info WITH EMPTY KEY.
 
     IF it_matnr IS INITIAL.
       RETURN.
