@@ -13,12 +13,14 @@ CLASS lcl_app DEFINITION FINAL.
         werks TYPE werks_d,
       END OF ty_key,
       ty_t_key_h TYPE HASHED TABLE OF ty_key WITH UNIQUE KEY matnr werks,
+
       BEGIN OF ty_stock,
         matnr TYPE mara-matnr,
         werks TYPE werks_d,
         qty   TYPE mard-labst,
       END OF ty_stock,
       ty_t_stock_h TYPE HASHED TABLE OF ty_stock WITH UNIQUE KEY matnr werks,
+
       BEGIN OF ty_info,
         matnr TYPE mara-matnr,
         mtart TYPE mara-mtart,
@@ -26,13 +28,14 @@ CLASS lcl_app DEFINITION FINAL.
         maktx TYPE makt-maktx,
       END OF ty_info,
       ty_t_info_h TYPE HASHED TABLE OF ty_info WITH UNIQUE KEY matnr,
+
       BEGIN OF ty_result,
-        matnr TYPE mara-matnr,
-        werks TYPE werks_d,
-        mtart TYPE mara-mtart,
-        matkl TYPE mara-matkl,
-        maktx TYPE makt-maktx,
-        qty   TYPE mard-labst,
+        matnr  TYPE mara-matnr,
+        werks  TYPE werks_d,
+        mtart  TYPE mara-mtart,
+        matkl  TYPE mara-matkl,
+        maktx  TYPE makt-maktx,
+        qty    TYPE mard-labst,
         status TYPE char20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
@@ -74,18 +77,16 @@ CLASS lcl_app IMPLEMENTATION.
     lt_mov   = get_movements( it_budat = s_budat it_werks = s_werks ).
     lt_stock = get_stocks( it_werks = s_werks ).
 
-    " Union of keys: movements
     LOOP AT lt_mov INTO ls_key.
       INSERT ls_key INTO TABLE lt_keys.
     ENDLOOP.
-    " Union of keys: stocks
+
     LOOP AT lt_stock INTO ls_stock.
       ls_key-matnr = ls_stock-matnr.
       ls_key-werks = ls_stock-werks.
       INSERT ls_key INTO TABLE lt_keys.
     ENDLOOP.
 
-    " Build material list
     LOOP AT lt_keys INTO ls_key.
       APPEND ls_key-matnr TO lt_matnr.
     ENDLOOP.
@@ -94,7 +95,6 @@ CLASS lcl_app IMPLEMENTATION.
 
     lt_info = get_material_info( it_matnr = lt_matnr ).
 
-    " Build result
     LOOP AT lt_keys INTO ls_key.
       CLEAR ls_res.
       ls_res-matnr = ls_key-matnr.
@@ -134,7 +134,7 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD get_movements.
-    DATA lt_mov TYPE STANDARD TABLE OF ty_key WITH EMPTY KEY.
+    DATA lt_mov_s TYPE STANDARD TABLE OF ty_key WITH EMPTY KEY.
 
     SELECT DISTINCT
       mseg~matnr,
@@ -143,5 +143,65 @@ CLASS lcl_app IMPLEMENTATION.
       INNER JOIN mkpf
         ON mkpf~mblnr = mseg~mblnr
        AND mkpf~mjahr = mseg~mjahr
-      INTO TABLE @lt_mov
-      WHERE mkpf~
+      INTO TABLE @lt_mov_s
+      WHERE mkpf~budat IN @it_budat
+        AND mseg~werks IN @it_werks
+        AND mseg~matnr IS NOT NULL.
+
+    LOOP AT lt_mov_s INTO DATA(ls_k).
+      INSERT ls_k INTO TABLE rt_mov.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD get_stocks.
+    DATA lt_stock_s TYPE STANDARD TABLE OF ty_stock WITH EMPTY KEY.
+
+    SELECT
+      mard~matnr,
+      mard~werks,
+      SUM( mard~labst ) AS qty
+      FROM mard
+      INTO TABLE @lt_stock_s
+      WHERE mard~werks IN @it_werks
+      GROUP BY
+        mard~matnr,
+        mard~werks
+      HAVING SUM( mard~labst ) > 0.
+
+    LOOP AT lt_stock_s INTO DATA(ls_s).
+      INSERT ls_s INTO TABLE rt_stock.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD get_material_info.
+    DATA lt_result TYPE STANDARD TABLE OF ty_info WITH EMPTY KEY.
+
+    IF it_matnr IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SELECT
+      mara~matnr,
+      mara~mtart,
+      mara~matkl,
+      makt~maktx
+      FROM mara
+      LEFT JOIN makt
+        ON makt~matnr = mara~matnr
+       AND makt~spras = @sy-langu
+      INTO TABLE @DATA(lt_join)
+      WHERE mara~matnr IN @it_matnr.
+
+    LOOP AT lt_join INTO DATA(ls_j).
+      DATA(ls_i) = VALUE ty_info(
+        matnr = ls_j-matnr
+        mtart = ls_j-mtart
+        matkl = ls_j-matkl
+        maktx = ls_j-maktx ).
+      INSERT ls_i INTO TABLE rt_info.
+    ENDLOOP.
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  lcl_app=>run( ).
