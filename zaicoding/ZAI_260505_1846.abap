@@ -39,18 +39,12 @@ CLASS lcl_app IMPLEMENTATION.
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
-    DATA lt_keys   TYPE ty_t_key.
     DATA lt_mov    TYPE ty_t_key.
     DATA lt_stock  TYPE ty_t_key.
-    DATA lt_info   TYPE ty_t_mara_info.
     DATA lt_result TYPE ty_t_result.
 
     DATA lt_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
     DATA lr_matnr TYPE RANGE OF mara-matnr.
-
-    DATA ls_key   TYPE ty_key.
-    DATA ls_info  TYPE ty_mara_info.
-    DATA ls_res   TYPE ty_result.
     DATA lr_line  LIKE LINE OF lr_matnr.
 
     " 1) Materials with movements in selected plants and posting dates
@@ -67,10 +61,11 @@ CLASS lcl_app IMPLEMENTATION.
       INTO TABLE @DATA(lt_mov_raw).
 
     LOOP AT lt_mov_raw INTO DATA(ls_mov_raw).
-      CLEAR ls_key.
-      ls_key-matnr = ls_mov_raw-matnr.
-      ls_key-werks = ls_mov_raw-werks.
-      ls_key-has_mov = abap_true.
+      DATA(ls_key) = VALUE ty_key(
+        matnr     = ls_mov_raw-matnr
+        werks     = ls_mov_raw-werks
+        has_mov   = abap_true
+        has_stock = abap_false ).
       APPEND ls_key TO lt_mov.
     ENDLOOP.
 
@@ -80,16 +75,17 @@ CLASS lcl_app IMPLEMENTATION.
       mard~werks
       FROM mard
       WHERE mard~werks IN @s_werks
-        AND mard~labst <> 0
       GROUP BY mard~matnr, mard~werks
+      HAVING SUM( mard~labst ) > 0
       INTO TABLE @DATA(lt_stock_raw).
 
     LOOP AT lt_stock_raw INTO DATA(ls_stock_raw).
-      CLEAR ls_key.
-      ls_key-matnr = ls_stock_raw-matnr.
-      ls_key-werks = ls_stock_raw-werks.
-      ls_key-has_stock = abap_true.
-      APPEND ls_key TO lt_stock.
+      DATA(ls_key2) = VALUE ty_key(
+        matnr     = ls_stock_raw-matnr
+        werks     = ls_stock_raw-werks
+        has_mov   = abap_false
+        has_stock = abap_true ).
+      APPEND ls_key2 TO lt_stock.
     ENDLOOP.
 
     " 3) Merge movement and stock keys
@@ -100,27 +96,27 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_all BY matnr werks.
     DATA lt_merged TYPE ty_t_key.
 
-    LOOP AT lt_all INTO ls_key.
+    LOOP AT lt_all INTO DATA(ls_all).
       READ TABLE lt_merged INTO DATA(ls_exist)
-        WITH KEY matnr = ls_key-matnr werks = ls_key-werks.
+        WITH KEY matnr = ls_all-matnr werks = ls_all-werks.
       IF sy-subrc = 0.
-        IF ls_key-has_mov = abap_true.
+        IF ls_all-has_mov = abap_true.
           ls_exist-has_mov = abap_true.
         ENDIF.
-        IF ls_key-has_stock = abap_true.
+        IF ls_all-has_stock = abap_true.
           ls_exist-has_stock = abap_true.
         ENDIF.
         MODIFY lt_merged FROM ls_exist
           TRANSPORTING has_mov has_stock
           WHERE matnr = ls_exist-matnr AND werks = ls_exist-werks.
       ELSE.
-        APPEND ls_key TO lt_merged.
+        APPEND ls_all TO lt_merged.
       ENDIF.
     ENDLOOP.
 
-    " 4) Build material list and range for info select
-    LOOP AT lt_merged INTO ls_key.
-      APPEND ls_key-matnr TO lt_matnr.
+    " 4) Build material number list and range
+    LOOP AT lt_merged INTO DATA(ls_mg).
+      APPEND ls_mg-matnr TO lt_matnr.
     ENDLOOP.
     SORT lt_matnr.
     DELETE ADJACENT DUPLICATES FROM lt_matnr.
@@ -134,8 +130,53 @@ CLASS lcl_app IMPLEMENTATION.
     ENDLOOP.
 
     " 5) Read material master + text
+    DATA lt_info TYPE ty_t_mara_info.
     IF lr_matnr IS NOT INITIAL.
       SELECT
         mara~matnr,
         mara~mtart,
-        mara~mat
+        mara~matkl,
+        makt~maktx
+        FROM mara
+        LEFT JOIN makt
+          ON makt~matnr = mara~matnr
+         AND makt~spras = @sy-langu
+        INTO TABLE @lt_info
+        WHERE mara~matnr IN @lr_matnr.
+    ENDIF.
+
+    " 6) Build final result with status
+    LOOP AT lt_merged INTO DATA(ls_row).
+      READ TABLE lt_info INTO DATA(ls_info)
+        WITH KEY matnr = ls_row-matnr.
+      DATA(lv_status) = COND char20(
+        WHEN ls_row-has_mov = abap_true AND ls_row-has_stock = abap_true
+          THEN '입출고+재고'
+        WHEN ls_row-has_mov = abap_true
+          THEN '입출고 있음'
+        WHEN ls_row-has_stock = abap_true
+          THEN '재고만 있음'
+        ELSE ' ' ).
+
+      APPEND VALUE ty_result(
+        matnr  = ls_row-matnr
+        mtart  = ls_info-mtart
+        matkl  = ls_info-matkl
+        maktx  = ls_info-maktx
+        werks  = ls_row-werks
+        status = lv_status ) TO lt_result.
+    ENDLOOP.
+
+    " 7) Display ALV
+    DATA lo_alv TYPE REF TO cl_salv_table.
+    cl_salv_table=>factory(
+      IMPORTING
+        r_salv_table = lo_alv
+      CHANGING
+        t_table      = lt_result ).
+    lo_alv->display( ).
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  lcl_app=>run( ).
