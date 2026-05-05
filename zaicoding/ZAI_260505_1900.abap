@@ -174,7 +174,8 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD get_material_info.
-    DATA lt_result TYPE STANDARD TABLE OF ty_info WITH EMPTY KEY.
+    DATA lt_join   TYPE STANDARD TABLE OF ty_info WITH EMPTY KEY.
+    DATA lt_local  TYPE STANDARD TABLE OF ty_info WITH EMPTY KEY.
 
     IF it_matnr IS INITIAL.
       RETURN.
@@ -189,15 +190,10 @@ CLASS lcl_app IMPLEMENTATION.
       LEFT JOIN makt
         ON makt~matnr = mara~matnr
        AND makt~spras = @sy-langu
-      INTO TABLE @DATA(lt_join)
+      INTO CORRESPONDING FIELDS OF TABLE @lt_local
       WHERE mara~matnr IN @it_matnr.
 
-    LOOP AT lt_join INTO DATA(ls_j).
-      DATA(ls_i) = VALUE ty_info(
-        matnr = ls_j-matnr
-        mtart = ls_j-mtart
-        matkl = ls_j-matkl
-        maktx = ls_j-maktx ).
+    LOOP AT lt_local INTO DATA(ls_i).
       INSERT ls_i INTO TABLE rt_info.
     ENDLOOP.
   ENDMETHOD.
