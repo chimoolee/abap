@@ -47,7 +47,6 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_mdata  TYPE ty_t_mdata.
     DATA lt_result TYPE ty_t_result.
 
-    " Materials with movements in selected date and plant
     SELECT DISTINCT
       mseg~matnr
       FROM mseg
@@ -69,7 +68,6 @@ CLASS lcl_app IMPLEMENTATION.
         AND mseg~werks IN @s_werks
       INTO TABLE @lt_mov_pairs.
 
-    " Materials with current non-zero stock in selected plants
     SELECT DISTINCT
       mard~matnr
       FROM mard
@@ -85,7 +83,6 @@ CLASS lcl_app IMPLEMENTATION.
         AND mard~labst <> 0
       INTO TABLE @lt_stock_pairs.
 
-    " Union of materials (movement OR stock>0)
     APPEND LINES OF lt_mov_matnr   TO lt_union.
     APPEND LINES OF lt_stock_matnr TO lt_union.
     SORT lt_union BY table_line.
@@ -96,7 +93,6 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    " Read material master and text for all union materials
     SELECT
       mara~matnr,
       mara~mtart,
@@ -111,7 +107,6 @@ CLASS lcl_app IMPLEMENTATION.
 
     SORT lt_mdata BY matnr.
 
-    " Build union of material-plant pairs to display status per plant
     APPEND LINES OF lt_mov_pairs   TO lt_pairs_all.
     APPEND LINES OF lt_stock_pairs TO lt_pairs_all.
     SORT lt_pairs_all BY matnr werks.
@@ -120,7 +115,6 @@ CLASS lcl_app IMPLEMENTATION.
     SORT lt_mov_pairs BY matnr werks.
     SORT lt_stock_pairs BY matnr werks.
 
-    " Assemble result with status
     DATA ls_res TYPE ty_result.
     LOOP AT lt_pairs_all ASSIGNING FIELD-SYMBOL(<ls_pair>).
       CLEAR ls_res.
@@ -128,7 +122,7 @@ CLASS lcl_app IMPLEMENTATION.
       ls_res-werks = <ls_pair>-werks.
 
       READ TABLE lt_mdata ASSIGNING FIELD-SYMBOL(<ls_md>)
-        WITH KEY matnr = <ls_pair>-matnr BINARY SEARCH.
+           WITH KEY matnr = <ls_pair>-matnr BINARY SEARCH.
       IF sy-subrc = 0.
         ls_res-mtart = <ls_md>-mtart.
         ls_res-matkl = <ls_md>-matkl.
@@ -139,15 +133,15 @@ CLASS lcl_app IMPLEMENTATION.
       DATA(lv_has_stk) = abap_false.
 
       READ TABLE lt_mov_pairs TRANSPORTING NO FIELDS
-        WITH KEY matnr = <ls_pair>-matnr
-                 werks = <ls_pair>-werks BINARY SEARCH.
+           WITH KEY matnr = <ls_pair>-matnr
+                    werks = <ls_pair>-werks BINARY SEARCH.
       IF sy-subrc = 0.
         lv_has_mov = abap_true.
       ENDIF.
 
       READ TABLE lt_stock_pairs TRANSPORTING NO FIELDS
-        WITH KEY matnr = <ls_pair>-matnr
-                 werks = <ls_pair>-werks BINARY SEARCH.
+           WITH KEY matnr = <ls_pair>-matnr
+                    werks = <ls_pair>-werks BINARY SEARCH.
       IF sy-subrc = 0.
         lv_has_stk = abap_true.
       ENDIF.
@@ -168,7 +162,6 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    " Display ALV
     DATA lo_alv TYPE REF TO cl_salv_table.
     TRY.
         cl_salv_table=>factory(
