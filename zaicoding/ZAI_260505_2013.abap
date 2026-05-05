@@ -1,10 +1,9 @@
 REPORT ZAI_260505_2013.
 
+TABLES mara.
+
 SELECT-OPTIONS: s_budat FOR mkpf~budat,
                  s_werks FOR t001w-werks.
-
-START-OF-SELECTION.
-  lcl_app=>run( ).
 
 CLASS lcl_app DEFINITION FINAL.
   PUBLIC SECTION.
@@ -42,7 +41,7 @@ CLASS lcl_app DEFINITION FINAL.
         maktx  TYPE makt-maktx,
         werks  TYPE werks_d,
         labst  TYPE mard-labst,
-        status TYPE char20,
+        status TYPE c LENGTH 20,
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
@@ -134,9 +133,8 @@ CLASS lcl_app IMPLEMENTATION.
         ls_result-labst = 0.
       ENDIF.
 
-      READ TABLE lt_move_hash WITH KEY
-        matnr = ls_key-matnr werks = ls_key-werks
-        TRANSPORTING NO FIELDS.
+      READ TABLE lt_move_hash WITH KEY matnr = ls_key-matnr werks = ls_key-werks
+           TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
         ls_result-status = '입출고 있음'.
       ELSE.
@@ -201,7 +199,9 @@ CLASS lcl_app IMPLEMENTATION.
        AND makt~spras = @sy-langu
       INTO TABLE @lt_mm
       WHERE mara~matnr IN @it_matnr.
-
     rt_mm = lt_mm.
   ENDMETHOD.
 ENDCLASS.
+
+START-OF-SELECTION.
+  lcl_app=>run( ).
