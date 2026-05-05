@@ -1,7 +1,5 @@
 REPORT ZAI_260505_1825.
 
-TABLES mara.
-
 SELECT-OPTIONS s_budat FOR mkpf-budat NO-EXTENSION.
 SELECT-OPTIONS s_werks FOR mseg-werks NO-EXTENSION.
 
@@ -26,8 +24,7 @@ CLASS lcl_app IMPLEMENTATION.
       END OF ty_result,
       ty_t_result TYPE STANDARD TABLE OF ty_result WITH EMPTY KEY.
 
-    DATA lt_result TYPE ty_t_result.
-
+    DATA lt_result   TYPE ty_t_result.
     DATA lt_mov_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
     DATA lt_stk_matnr TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
     DATA lt_matnr     TYPE STANDARD TABLE OF mara-matnr WITH EMPTY KEY.
